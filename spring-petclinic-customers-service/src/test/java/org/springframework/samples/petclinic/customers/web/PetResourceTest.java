@@ -38,9 +38,6 @@ class PetResourceTest {
     @MockBean
     PetRepository petRepository;
 
-    @MockBean
-    OwnerRepository ownerRepository;
-
     @Test
     void shouldGetAPetInJSonFormat() throws Exception {
 
