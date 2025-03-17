@@ -24,6 +24,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+
+
+
 /**
  * @author Maciej Szarlinski
  */
@@ -138,3 +141,92 @@ class PetResourceTest {
         return pet;
     }
  }
+
+
+@ExtendWith(SpringExtension.class)
+@WebMvcTest(OwnerResource.class)
+class OwnerResourceTest {
+
+    @Autowired
+    MockMvc mvc;
+
+    @MockBean
+    OwnerRepository ownerRepository;
+
+    @Test
+    void shouldGetAnOwnerInJSONFormat() throws Exception {
+        Owner owner = new Owner();
+        owner.setId(1);
+        owner.setFirstName("John");
+        owner.setLastName("Doe");
+
+        given(ownerRepository.findById(1)).willReturn(Optional.of(owner));
+
+        mvc.perform(get("/owners/1").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType("application/json"))
+            .andExpect(jsonPath("$.id").value(1))
+            .andExpect(jsonPath("$.firstName").value("John"))
+            .andExpect(jsonPath("$.lastName").value("Doe"));
+    }
+
+    @Test
+    void shouldReturnNotFoundForNonExistingOwner() throws Exception {
+        given(ownerRepository.findById(99)).willReturn(Optional.empty());
+
+        mvc.perform(get("/owners/99").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldGetAllOwners() throws Exception {
+        Owner owner1 = new Owner();
+        owner1.setId(1);
+        owner1.setFirstName("John");
+
+        Owner owner2 = new Owner();
+        owner2.setId(2);
+        owner2.setFirstName("Jane");
+
+        given(ownerRepository.findAll()).willReturn(Arrays.asList(owner1, owner2));
+
+        mvc.perform(get("/owners").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].id").value(1))
+            .andExpect(jsonPath("$[1].id").value(2));
+    }
+
+    @Test
+    void shouldCreateOwner() throws Exception {
+        String jsonOwner = "{ \"firstName\": \"Alice\", \"lastName\": \"Smith\" }";
+
+        mvc.perform(post("/owners")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(jsonOwner))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    void shouldUpdateOwner() throws Exception {
+        Owner existingOwner = new Owner();
+        existingOwner.setId(1);
+        existingOwner.setFirstName("Old Name");
+
+        given(ownerRepository.findById(1)).willReturn(Optional.of(existingOwner));
+
+        String updatedJsonOwner = "{ \"firstName\": \"New Name\", \"lastName\": \"Smith\" }";
+
+        mvc.perform(put("/owners/1")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(updatedJsonOwner))
+            .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void shouldHandleRepositoryExceptionGracefully() throws Exception {
+        given(petRepository.findById(2)).willThrow(new RuntimeException("Database error"));
+    
+        mvc.perform(get("/owners/2/pets/2").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isInternalServerError());
+    }
+}
