@@ -93,4 +93,13 @@ class VetResourceTest {
         // Ensure the repository was called
         org.mockito.Mockito.verify(vetRepository).findAll();
     }
+
+    @Test
+    void shouldHandleDatabaseErrorGracefully() throws Exception {
+        given(vetRepository.findAll()).willThrow(new RuntimeException("Database error"));
+
+        mvc.perform(get("/vets").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().is5xxServerError());
+    }
+    
 }
