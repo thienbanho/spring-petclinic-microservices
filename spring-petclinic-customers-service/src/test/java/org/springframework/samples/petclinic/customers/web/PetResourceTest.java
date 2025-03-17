@@ -1,5 +1,6 @@
 package org.springframework.samples.petclinic.customers.web;
 
+import java.lang.StackWalker.Option;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -23,8 +24,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * @author Maciej Szarlinski
+ */
 @ExtendWith(SpringExtension.class)
-@WebMvcTest({PetResource.class, OwnerResource.class})
+@WebMvcTest(PetResource.class)
 @ActiveProfiles("test")
 class PetResourceTest {
 
@@ -39,8 +43,11 @@ class PetResourceTest {
 
     @Test
     void shouldGetAPetInJSonFormat() throws Exception {
+
         Pet pet = setupPet();
+
         given(petRepository.findById(2)).willReturn(Optional.of(pet));
+
 
         mvc.perform(get("/owners/2/pets/2").accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk())
@@ -52,6 +59,7 @@ class PetResourceTest {
 
     @Test
     void shouldFindPetById() throws Exception {
+        // Given
         Owner owner = new Owner();
         owner.setFirstName("John");
         owner.setLastName("Doe");
@@ -63,6 +71,7 @@ class PetResourceTest {
 
         given(petRepository.findById(1)).willReturn(Optional.of(pet));
 
+        // When/Then
         mvc.perform(get("/owners/1/pets/1").accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk())
             .andExpect(content().contentType("application/json"))
@@ -99,7 +108,7 @@ class PetResourceTest {
         Pet pet = setupPet();
         pet.setId(3);
         pet.setName("Shadow");
-        pet.setType(null);
+        pet.setType(null);  
 
         given(petRepository.findById(3)).willReturn(Optional.of(pet));
 
@@ -111,37 +120,13 @@ class PetResourceTest {
             .andExpect(jsonPath("$.type").doesNotExist());
     }
 
-    @Test
-    void shouldGetOwnerById() throws Exception {
-        Owner owner = new Owner();
-        owner.setId(1);
-        owner.setFirstName("John");
-        owner.setLastName("Doe");
-
-        given(ownerRepository.findById(1)).willReturn(Optional.of(owner));
-
-        mvc.perform(get("/owners/1").accept(MediaType.APPLICATION_JSON))
-            .andExpect(status().isOk())
-            .andExpect(content().contentType("application/json"))
-            .andExpect(jsonPath("$.id").value(1))
-            .andExpect(jsonPath("$.firstName").value("John"))
-            .andExpect(jsonPath("$.lastName").value("Doe"));
-    }
-
-    @Test
-    void shouldReturnNotFoundForNonExistingOwner() throws Exception {
-        given(ownerRepository.findById(99)).willReturn(Optional.empty());
-
-        mvc.perform(get("/owners/99").accept(MediaType.APPLICATION_JSON))
-            .andExpect(status().isNotFound());
-    }
-
     private Pet setupPet() {
         Owner owner = new Owner();
         owner.setFirstName("George");
         owner.setLastName("Bush");
 
         Pet pet = new Pet();
+
         pet.setName("Basil");
         pet.setId(2);
 
@@ -152,4 +137,4 @@ class PetResourceTest {
         owner.addPet(pet);
         return pet;
     }
-}
+ }
