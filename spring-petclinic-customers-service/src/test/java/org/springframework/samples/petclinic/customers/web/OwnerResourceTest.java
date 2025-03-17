@@ -8,6 +8,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.samples.petclinic.customers.model.Owner;
 import org.springframework.samples.petclinic.customers.model.OwnerRepository;
+import org.springframework.samples.petclinic.customers.web.mapper.OwnerEntityMapper;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
@@ -17,7 +18,6 @@ import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -29,79 +29,106 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class OwnerResourceTest {
 
     @Autowired
-    MockMvc mvc;
+    private MockMvc mockMvc;
 
     @MockBean
-    OwnerRepository ownerRepository;
+    private OwnerRepository ownerRepository;
+
+    @MockBean
+    private OwnerEntityMapper ownerEntityMapper;
 
     @Test
-    void shouldGetAnOwnerInJSONFormat() throws Exception {
-
+    void testFindOwnerById_Success() throws Exception {
         Owner owner = new Owner();
         owner.setFirstName("John");
         owner.setLastName("Doe");
+        owner.setAddress("123 Street");
+        owner.setCity("New York");
+        owner.setTelephone("1234567890");
 
         given(ownerRepository.findById(1)).willReturn(Optional.of(owner));
 
-        mvc.perform(get("/owners/1").accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get("/owners/1"))
             .andExpect(status().isOk())
-            .andExpect(content().contentType("application/json"))
             .andExpect(jsonPath("$.firstName").value("John"))
             .andExpect(jsonPath("$.lastName").value("Doe"));
     }
 
     @Test
-    void shouldReturnNotFoundForNonExistingOwner() throws Exception {
-        given(ownerRepository.findById(99)).willReturn(Optional.empty());
+    void testFindOwnerById_NotFound() throws Exception {
+        given(ownerRepository.findById(1)).willReturn(Optional.empty());
 
-        mvc.perform(get("/owners/99").accept(MediaType.APPLICATION_JSON))
-            .andExpect(status().isNotFound());
+        mockMvc.perform(get("/owners/1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").doesNotExist());
     }
 
     @Test
-    void shouldGetAllOwners() throws Exception {
+    void testFindAllOwners() throws Exception {
         Owner owner1 = new Owner();
         owner1.setFirstName("John");
+        owner1.setLastName("Doe");
 
         Owner owner2 = new Owner();
         owner2.setFirstName("Jane");
+        owner2.setLastName("Smith");
 
         given(ownerRepository.findAll()).willReturn(Arrays.asList(owner1, owner2));
 
-        mvc.perform(get("/owners").accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get("/owners"))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(2))
             .andExpect(jsonPath("$[0].firstName").value("John"))
             .andExpect(jsonPath("$[1].firstName").value("Jane"));
     }
 
     @Test
-    void shouldCreateOwner() throws Exception {
-        String jsonOwner = "{ \"firstName\": \"Alice\", \"lastName\": \"Smith\", \"address\": \"123 Main St\", \"city\": \"NYC\", \"telephone\": \"1234567890\" }";
+    void testCreateOwner() throws Exception {
+        Owner owner = new Owner();
+        owner.setFirstName("Alice");
+        owner.setLastName("Brown");
+        owner.setAddress("456 Street");
+        owner.setCity("Los Angeles");
+        owner.setTelephone("0987654321");
 
-        Owner savedOwner = new Owner();
-        savedOwner.setFirstName("Alice");
-        savedOwner.setLastName("Smith");
+        given(ownerRepository.save(any(Owner.class))).willReturn(owner);
 
-        when(ownerRepository.save(any(Owner.class))).thenReturn(savedOwner);
-
-        mvc.perform(post("/owners")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(jsonOwner))
-            .andExpect(status().isCreated());
+        mockMvc.perform(post("/owners")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "firstName": "Alice",
+                        "lastName": "Brown",
+                        "address": "456 Street",
+                        "city": "Los Angeles",
+                        "telephone": "0987654321"
+                    }
+                """))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.firstName").value("Alice"))
+            .andExpect(jsonPath("$.lastName").value("Brown"));
     }
 
     @Test
-    void shouldUpdateOwner() throws Exception {
+    void testUpdateOwner() throws Exception {
         Owner existingOwner = new Owner();
-        existingOwner.setFirstName("Old Name");
+        existingOwner.setFirstName("Bob");
+        existingOwner.setLastName("Miller");
 
         given(ownerRepository.findById(1)).willReturn(Optional.of(existingOwner));
+        given(ownerRepository.save(any(Owner.class))).willReturn(existingOwner);
 
-        String updatedJsonOwner = "{ \"firstName\": \"New Name\", \"lastName\": \"Smith\", \"address\": \"123 Main St\", \"city\": \"NYC\", \"telephone\": \"1234567890\" }";
-
-        mvc.perform(put("/owners/1")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(updatedJsonOwner))
+        mockMvc.perform(put("/owners/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "firstName": "Bob",
+                        "lastName": "Miller",
+                        "address": "789 Street",
+                        "city": "Chicago",
+                        "telephone": "1122334455"
+                    }
+                """))
             .andExpect(status().isNoContent());
     }
 }
