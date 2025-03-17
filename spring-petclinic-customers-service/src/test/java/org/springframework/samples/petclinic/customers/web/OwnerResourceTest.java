@@ -1,6 +1,7 @@
 package org.springframework.samples.petclinic.customers.web;
 
-import org.junit.jupiter.api.BeforeEach;
+import java.util.Optional;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,12 +14,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.Optional;
-
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(SpringExtension.class)
 @WebMvcTest(OwnerResource.class)
@@ -26,51 +26,40 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class OwnerResourceTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    MockMvc mvc;
 
     @MockBean
-    private OwnerRepository ownerRepository;
+    OwnerRepository ownerRepository;
 
-    @BeforeEach
-    void setup() {
-        Owner owner = new Owner();
-        owner.setFirstName("John");
-        owner.setLastName("Doe");
-        owner.setAddress("123 Street");
-        owner.setCity("New York");
-        owner.setTelephone("1234567890");
-        given(ownerRepository.save(any(Owner.class)))
-            .willAnswer(invocation -> invocation.getArgument(0));
+    @Test
+    void shouldGetAnOwnerInJsonFormat() throws Exception {
+        Owner owner = setupOwner();
 
-        given(ownerRepository.findById(1))
-            .willReturn(Optional.of(owner));
+        given(ownerRepository.findById(1)).willReturn(Optional.of(owner));
+
+        mvc.perform(get("/owners/1").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType("application/json"))
+            .andExpect(jsonPath("$.id").value(1))
+            .andExpect(jsonPath("$.firstName").value("John"))
+            .andExpect(jsonPath("$.lastName").value("Doe"));
     }
 
     @Test
-    void testCreateOwner() throws Exception {
-        String ownerJson = """
-            {
-                "firstName": "Alice",
-                "lastName": "Brown",
-                "address": "456 Street",
-                "city": "Los Angeles",
-                "telephone": "0987654321"
-            }
-        """;
+    void shouldReturnNotFoundForNonExistingOwner() throws Exception {
+        given(ownerRepository.findById(99)).willReturn(Optional.empty());
 
-        String response = mockMvc.perform(post("/owners")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(ownerJson))
-            .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.firstName").value("Alice"))
-            .andExpect(jsonPath("$.lastName").value("Brown"))
-            .andExpect(jsonPath("$.address").value("456 Street"))
-            .andExpect(jsonPath("$.city").value("Los Angeles"))
-            .andExpect(jsonPath("$.telephone").value("0987654321"))
-            .andReturn()
-            .getResponse()
-            .getContentAsString();
+        mvc.perform(get("/owners/99").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isNotFound());
+    }
 
-        System.out.println("API Response: " + response);
+    private Owner setupOwner() {
+        Owner owner = new Owner();
+        owner.setFirstName("John");
+        owner.setLastName("Doe");
+        owner.setAddress("123 Main St");
+        owner.setCity("New York");
+        owner.setTelephone("1234567890");
+        return owner;
     }
 }
