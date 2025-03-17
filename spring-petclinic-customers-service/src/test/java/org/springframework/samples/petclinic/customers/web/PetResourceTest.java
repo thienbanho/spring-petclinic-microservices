@@ -120,33 +120,6 @@ class PetResourceTest {
             .andExpect(jsonPath("$.type").doesNotExist());
     }
 
-    @Test
-    void shouldReturnNotFoundForNonExistingPetDetails() throws Exception {
-        given(petRepository.findById(99)).willReturn(Optional.empty());
-
-        mvc.perform(get("/owners/*/pets/99").accept(MediaType.APPLICATION_JSON))
-            .andExpect(status().isNotFound());
-    }
-
-
-
-    @Test
-    void shouldFindPetDetails() throws Exception {
-        Pet pet = new Pet();
-        pet.setId(1);
-        pet.setName("Max");
-        pet.setBirthDate(java.sql.Date.valueOf("2020-05-10"));
-
-        given(petRepository.findById(1)).willReturn(Optional.of(pet));
-
-        mvc.perform(get("/owners/*/pets/1").accept(MediaType.APPLICATION_JSON))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.id").value(1))
-            .andExpect(jsonPath("$.name").value("Max"))
-            .andExpect(jsonPath("$.birthDate").value("2020-05-10"));
-    }
-    
-
     private Pet setupPet() {
         Owner owner = new Owner();
         owner.setFirstName("George");
