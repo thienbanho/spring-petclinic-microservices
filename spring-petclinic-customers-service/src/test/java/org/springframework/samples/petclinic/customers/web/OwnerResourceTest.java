@@ -37,6 +37,7 @@ class OwnerResourceTest {
 
     @Test
     void shouldGetAnOwnerInJSONFormat() throws Exception {
+
         Owner owner = new Owner();
         owner.setFirstName("John");
         owner.setLastName("Doe");
