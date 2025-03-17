@@ -95,11 +95,18 @@ class VetResourceTest {
     }
 
     @Test
-    void shouldHandleDatabaseErrorGracefully() throws Exception {
-        given(vetRepository.findAll()).willThrow(new RuntimeException("Database error"));
+    void shouldHandleNullFieldsGracefully() throws Exception {
+        Vet vet = new Vet();
+        vet.setId(1);
+        // Không set firstName và lastName
+
+        given(vetRepository.findAll()).willReturn(List.of(vet));
 
         mvc.perform(get("/vets").accept(MediaType.APPLICATION_JSON))
-            .andExpect(status().is5xxServerError());
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].id").value(1))
+            .andExpect(jsonPath("$[0].firstName").doesNotExist())
+            .andExpect(jsonPath("$[0].lastName").doesNotExist());
     }
-    
+
 }
