@@ -17,6 +17,7 @@ package org.springframework.samples.petclinic.vets.web;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -27,11 +28,17 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.Arrays;
+import java.util.List;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static java.util.Arrays.asList;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import java.util.Collections;
 
 /**
  * @author Maciej Szarlinski
@@ -47,6 +54,9 @@ class VetResourceTest {
     @MockBean
     VetRepository vetRepository;
 
+    @InjectMocks
+    VetResource vetResource;
+
     @Test
     void shouldGetAListOfVets() throws Exception {
 
@@ -58,5 +68,29 @@ class VetResourceTest {
         mvc.perform(get("/vets").accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].id").value(1));
+    }
+
+    @Test
+    void shouldReturnEmptyListIfNoVets() throws Exception {
+        // Given an empty repository
+        given(vetRepository.findAll()).willReturn(Collections.emptyList());
+
+        // When performing GET request
+        mvc.perform(get("/vets").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(0)); // Expecting an empty array
+    }
+
+    @Test
+    void shouldVerifyVetRepositoryCalled() throws Exception {
+        // Given some vets exist
+        given(vetRepository.findAll()).willReturn(List.of(new Vet()));
+
+        // When performing GET request
+        mvc.perform(get("/vets").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk());
+
+        // Ensure the repository was called
+        org.mockito.Mockito.verify(vetRepository).findAll();
     }
 }
