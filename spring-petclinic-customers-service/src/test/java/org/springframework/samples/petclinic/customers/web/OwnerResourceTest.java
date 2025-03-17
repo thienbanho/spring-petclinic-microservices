@@ -26,7 +26,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ExtendWith(SpringExtension.class)
 @WebMvcTest(OwnerResource.class)
 @ActiveProfiles("test")
-
 class OwnerResourceTest {
 
     @Autowired
