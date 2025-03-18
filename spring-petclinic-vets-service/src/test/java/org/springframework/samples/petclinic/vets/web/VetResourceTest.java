@@ -109,7 +109,6 @@ class VetResourceTest {
             .andExpect(jsonPath("$[0].lastName").doesNotExist());
     }
 
-
     @Test
     void shouldHandleNullResponseFromRepository() throws Exception {
         // Giả lập vetRepository trả về null
@@ -119,7 +118,28 @@ class VetResourceTest {
             .andExpect(status().isOk()) // Đảm bảo API không crash
             .andExpect(jsonPath("$").doesNotExist()); // Kiểm tra phản hồi null
     }
+
+    @Test
+    void shouldHandleMultipleVets() throws Exception {
+        Vet vet1 = new Vet();
+        vet1.setId(1);
+        vet1.setFirstName("John");
+        vet1.setLastName("Doe");
+        
+        Vet vet2 = new Vet();
+        vet2.setId(2);
+        vet2.setFirstName("Jane");
+        vet2.setLastName("Smith");
+        
+        given(vetRepository.findAll()).willReturn(List.of(vet1, vet2));
     
-
-
+        mvc.perform(get("/vets").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].id").value(1))
+            .andExpect(jsonPath("$[0].firstName").value("John"))
+            .andExpect(jsonPath("$[0].lastName").value("Doe"))
+            .andExpect(jsonPath("$[1].id").value(2))
+            .andExpect(jsonPath("$[1].firstName").value("Jane"))
+            .andExpect(jsonPath("$[1].lastName").value("Smith"));
+    }
 }
