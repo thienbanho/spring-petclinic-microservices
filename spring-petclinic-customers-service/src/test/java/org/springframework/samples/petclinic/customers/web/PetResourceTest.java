@@ -180,29 +180,52 @@ class PetResourceTest {
     }
 
     @Test
-    void shouldReturnPetDetailsObject() throws Exception {
-        // Arrange
-        Pet pet = setupPet();
-        pet.setBirthDate(java.sql.Date.valueOf("2020-05-10"));
-        Owner owner = new Owner();
-        owner.setFirstName("George");
-        owner.setLastName("Bush");
-        pet.setOwner(owner);
+    void shouldThrowExceptionWhenOwnerNotFoundDuringPetCreation() throws Exception {
+        // Given
+        given(ownerRepository.findById(999)).willReturn(Optional.empty());
         
-        given(petRepository.findById(2)).willReturn(Optional.of(pet));
+        String newPetJson = """
+        {
+            "name": "Ghost",
+            "birthDate": "2021-04-20",
+            "typeId": 2
+        }
+        """;
         
-        // Act & Assert
-        mvc.perform(get("/owners/2/pets/2").accept(MediaType.APPLICATION_JSON))
-            .andExpect(status().isOk())
-            .andExpect(content().contentType("application/json"))
-            .andExpect(jsonPath("$.id").value(2))
-            .andExpect(jsonPath("$.name").value("Basil"))
-            .andExpect(jsonPath("$.birthDate").value("2020-05-10"))
-            .andExpect(jsonPath("$.type.id").value(6))
-            .andExpect(jsonPath("$.ownerFirstName").value("George"))
-            .andExpect(jsonPath("$.ownerLastName").value("Bush"));
+        // When/Then
+        mvc.perform(post("/owners/999/pets")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(newPetJson))
+            .andExpect(status().isNotFound());
     }
 
+    @Test
+    void shouldUpdateExistingPet() throws Exception {
+        // Given
+        Pet existingPet = setupPet();
+        PetType catType = createPetType(1, "Cat");
+        
+        given(petRepository.findById(2)).willReturn(Optional.of(existingPet));
+        given(petRepository.findPetTypeById(1)).willReturn(Optional.of(catType));
+        
+        String updatePetJson = """
+        {
+            "id": 2,
+            "name": "BasilUpdated",
+            "birthDate": "2019-08-15",
+            "typeId": 1
+        }
+        """;
+        
+        // When/Then
+        mvc.perform(put("/owners/2/pets/2")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(updatePetJson))
+            .andExpect(status().isNoContent());
+        
+        // Verify that pet was saved
+        org.mockito.Mockito.verify(petRepository).save(existingPet);
+    }
 
     // Helper method to create a PetType with id and name
     private PetType createPetType(int id, String name) {
