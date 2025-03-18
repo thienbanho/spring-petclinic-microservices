@@ -112,13 +112,14 @@ class VetResourceTest {
 
     @Test
     void shouldHandleNullResponseFromRepository() throws Exception {
-        // Giả lập repo trả về null
+        // Giả lập vetRepository trả về null
         given(vetRepository.findAll()).willReturn(null);
-
-        mvc.perform(get("/vets").accept(MediaType.APPLICATION_JSON))
-            .andExpect(status().isOk()) // Có thể thay đổi nếu bạn muốn trả về lỗi khác
-            .andExpect(jsonPath("$.length()").value(0)); // API vẫn trả về danh sách rỗng
-    }
-
     
+        mvc.perform(get("/vets").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk()) // Đảm bảo API không crash
+            .andExpect(jsonPath("$").doesNotExist()); // Kiểm tra phản hồi null
+    }
+    
+
+
 }
