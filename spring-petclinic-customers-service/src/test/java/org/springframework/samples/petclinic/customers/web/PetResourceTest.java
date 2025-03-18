@@ -2,6 +2,8 @@ package org.springframework.samples.petclinic.customers.web;
 
 import java.lang.StackWalker.Option;
 import java.util.Optional;
+import java.util.List;
+
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,7 +19,12 @@ import org.springframework.samples.petclinic.customers.model.PetType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.samples.petclinic.customers.web.PetRequest;
 
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -149,6 +156,61 @@ class PetResourceTest {
             .andExpect(status().isMethodNotAllowed());
     }
 
+    @Test
+    void shouldGetAllPetTypes() throws Exception {
+        // Arrange
+        List<PetType> petTypes = List.of(
+            createPetType(1, "Dog"),
+            createPetType(2, "Cat"),
+            createPetType(3, "Bird")
+        );
+        
+        given(petRepository.findPetTypes()).willReturn(petTypes);
+        
+        // Act & Assert
+        mvc.perform(get("/petTypes").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType("application/json"))
+            .andExpect(jsonPath("$[0].id").value(1))
+            .andExpect(jsonPath("$[0].name").value("Dog"))
+            .andExpect(jsonPath("$[1].id").value(2))
+            .andExpect(jsonPath("$[1].name").value("Cat"))
+            .andExpect(jsonPath("$[2].id").value(3))
+            .andExpect(jsonPath("$[2].name").value("Bird"));
+    }
+
+    @Test
+    void shouldReturnPetDetailsObject() throws Exception {
+        // Arrange
+        Pet pet = setupPet();
+        pet.setBirthDate(java.sql.Date.valueOf("2020-05-10"));
+        Owner owner = new Owner();
+        owner.setFirstName("George");
+        owner.setLastName("Bush");
+        pet.setOwner(owner);
+        
+        given(petRepository.findById(2)).willReturn(Optional.of(pet));
+        
+        // Act & Assert
+        mvc.perform(get("/owners/2/pets/2").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType("application/json"))
+            .andExpect(jsonPath("$.id").value(2))
+            .andExpect(jsonPath("$.name").value("Basil"))
+            .andExpect(jsonPath("$.birthDate").value("2020-05-10"))
+            .andExpect(jsonPath("$.type.id").value(6))
+            .andExpect(jsonPath("$.ownerFirstName").value("George"))
+            .andExpect(jsonPath("$.ownerLastName").value("Bush"));
+    }
+
+
+    // Helper method to create a PetType with id and name
+    private PetType createPetType(int id, String name) {
+        PetType petType = new PetType();
+        petType.setId(id);
+        petType.setName(name);
+        return petType;
+    }
 
     private Pet setupPet() {
         Owner owner = new Owner();
