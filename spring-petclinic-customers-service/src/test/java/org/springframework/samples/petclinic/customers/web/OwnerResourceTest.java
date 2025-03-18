@@ -1,10 +1,21 @@
 package org.springframework.samples.petclinic.customers.web;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import java.lang.reflect.Field;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
-import java.util.List;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -12,18 +23,11 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.samples.petclinic.customers.model.Owner;
 import org.springframework.samples.petclinic.customers.model.OwnerRepository;
+import org.springframework.samples.petclinic.customers.model.Pet;
 import org.springframework.samples.petclinic.customers.web.mapper.OwnerEntityMapper;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
-
-import static org.mockito.BDDMockito.given;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(SpringExtension.class)
 @WebMvcTest(OwnerResource.class) // ✅ Loads only the web layer
@@ -244,6 +248,71 @@ class OwnerResourceTest {
         
         // Verify that save was called
         org.mockito.Mockito.verify(ownerRepository).save(existingOwner);
+    }
+
+    @Test
+    void shouldTestOwnerToString() throws Exception {
+        Owner owner = setupOwner();
+        
+        // Call toString() to increase coverage
+        String ownerString = owner.toString();
+        
+        // Verify toString() includes expected information
+        assertTrue(ownerString.contains("id=1"));
+        assertTrue(ownerString.contains("lastName=Doe"));
+        assertTrue(ownerString.contains("firstName=John"));
+        assertTrue(ownerString.contains("address=123 Main Street"));
+        assertTrue(ownerString.contains("city=Springfield"));
+        assertTrue(ownerString.contains("telephone=123456789"));
+    }
+
+    @Test
+    void shouldTestResourceNotFoundException() throws Exception {
+        // Create mocked exception for when owner is not found
+        ResourceNotFoundException exception = new ResourceNotFoundException("Owner 999 not found");
+        
+        given(ownerRepository.findById(999)).willReturn(Optional.empty());
+        
+        // Mock the behavior of the controller when ResourceNotFoundException is thrown
+        // We're using doThrow() here to force the exception during the test
+        org.mockito.Mockito.doThrow(exception)
+            .when(ownerRepository).findById(999);
+        
+        String updatedOwnerJson = """
+        {
+            "firstName": "Updated",
+            "lastName": "Owner",
+            "address": "Not Found Street",
+            "city": "Nowhere",
+            "telephone": "555555555"
+        }
+        """;
+        
+        // Check what status code is returned
+        mvc.perform(put("/owners/999")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(updatedOwnerJson))
+            .andExpect(status().isNotFound()); // Assuming your exception handler returns 404
+    }
+
+     
+
+    @Test
+    void shouldHandleOwnerWithNoPets() throws Exception {
+        Owner owner = setupOwner();
+        // Explicitly set pets to null to test getPetsInternal() null branch
+        Field petsField = Owner.class.getDeclaredField("pets");
+        petsField.setAccessible(true);
+        petsField.set(owner, null);
+        
+        given(ownerRepository.findById(1)).willReturn(Optional.of(owner));
+        
+        mvc.perform(get("/owners/1").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType("application/json"))
+            .andExpect(jsonPath("$.id").value(1))
+            .andExpect(jsonPath("$.pets").isArray())
+            .andExpect(jsonPath("$.pets").isEmpty());
     }
 
 
