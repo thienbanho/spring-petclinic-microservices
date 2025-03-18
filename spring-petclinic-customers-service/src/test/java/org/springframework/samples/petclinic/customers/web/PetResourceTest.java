@@ -19,6 +19,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -119,6 +120,35 @@ class PetResourceTest {
             .andExpect(jsonPath("$.name").value("Shadow"))
             .andExpect(jsonPath("$.type").doesNotExist());
     }
+
+    @Test
+    void shouldReturnPetWithCorshouldReturnPetWithCorrectJsonFormatrectJsonFormat() throws Exception {
+        Pet pet = setupPet();
+
+        given(petRepository.findById(2)).willReturn(Optional.of(pet));
+
+        mvc.perform(get("/owners/2/pets/2").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+            .andExpect(jsonPath("$.id").value(2))
+            .andExpect(jsonPath("$.name").value("Basil"))
+            .andExpect(jsonPath("$.type.id").value(6));
+    }
+
+    @Test
+    void shouldReturnNotFoundWhenPetDoesNotExist() throws Exception {
+        given(petRepository.findById(999)).willReturn(Optional.empty());
+
+        mvc.perform(get("/owners/2/pets/999").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldReturnMethodNotAllowedWhenDeletingPet() throws Exception {
+        mvc.perform(delete("/owners/2/pets/999"))
+            .andExpect(status().isMethodNotAllowed());
+    }
+
 
     private Pet setupPet() {
         Owner owner = new Owner();
