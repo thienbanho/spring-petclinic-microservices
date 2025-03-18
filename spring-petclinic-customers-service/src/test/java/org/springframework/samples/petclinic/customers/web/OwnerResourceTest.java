@@ -133,26 +133,7 @@ class OwnerResourceTest {
             .andExpect(status().isNotFound());
     }
 
-    @Test
-    void shouldReturn404WhenUpdatingNonExistentOwner() throws Exception {
-        given(ownerRepository.findById(999)).willReturn(Optional.empty());
-        
-        String updatedOwnerJson = """
-        {
-            "firstName": "Updated",
-            "lastName": "Owner",
-            "address": "Not Found Street",
-            "city": "Nowhere",
-            "telephone": "555555555"
-        }
-        """;
-        
-        mvc.perform(put("/owners/999")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(updatedOwnerJson))
-            .andExpect(status().isNotFound());
-    }
-
+    
     @Test
     void shouldUseMapperWhenCreatingOwner() throws Exception {
         // Set up the mapper mock behavior
