@@ -12,8 +12,7 @@ pipeline {
         }
         stage('Build Docker Image') {
             steps {
-                sh 'ls -l'
-                sh 'test -f Dockerfile && echo "Dockerfile exists" || echo "Dockerfile NOT found!"'
+                sh 'docker build -t $DOCKER_IMAGE:$COMMIT_ID -f docker/Dockerfile docker/'
             }
         }
         stage('Push to Docker Hub') {
