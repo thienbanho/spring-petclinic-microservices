@@ -12,6 +12,7 @@ pipeline {
         }
         stage('Build Docker Image') {
             steps {
+                ls -l
                 sh 'docker build -t $DOCKER_IMAGE:$COMMIT_ID .'
             }
         }
