@@ -3,6 +3,7 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'thienbanho/petclinic'
         COMMIT_ID = "${env.GIT_COMMIT ?: 'latest'}"  // Nếu env.GIT_COMMIT null thì dùng 'latest'
+        ARTIFACT_NAME = "spring-petclinic"  // Đặt giá trị phù hợp với tên file .jar
     }
     stages {
         stage('Clone Repository') {
@@ -10,9 +11,14 @@ pipeline {
                 git branch: 'main', credentialsId: 'github-credentials-id', url: 'https://github.com/thienbanho/spring-petclinic-microservices.git'
             }
         }
+        stage('Build Java Application') {
+            steps {
+                sh './mvnw clean package -DskipTests'
+            }
+        }
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t $DOCKER_IMAGE:$COMMIT_ID -f docker/Dockerfile docker/'
+                sh 'docker build --build-arg ARTIFACT_NAME=$ARTIFACT_NAME -t $DOCKER_IMAGE:$COMMIT_ID -f docker/Dockerfile docker/'
             }
         }
         stage('Push to Docker Hub') {
