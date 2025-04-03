@@ -7,7 +7,7 @@ pipeline {
     stages {
         stage('Clone Repository') {
             steps {
-                git 'https://github.com/spring-petclinic/spring-petclinic-microservices.git'
+                git 'https://github.com/thienbanho/spring-petclinic-microservices.git'
             }
         }
         stage('Build Docker Image') {
