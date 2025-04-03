@@ -18,7 +18,7 @@ pipeline {
         }
         stage('Build Docker Image') {
             steps {
-                sh 'docker build --build-arg ARTIFACT_NAME=$ARTIFACT_NAME -t $DOCKER_IMAGE:$COMMIT_ID -f docker/Dockerfile docker/'
+                sh 'docker build --build-arg ARTIFACT_NAME=spring-petclinic -t $DOCKER_IMAGE:$COMMIT_ID -f docker/Dockerfile .'
             }
         }
         stage('Push to Docker Hub') {
