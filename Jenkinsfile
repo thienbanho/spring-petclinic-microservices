@@ -19,6 +19,7 @@ pipeline {
             steps {
                 withDockerRegistry([url: 'https://index.docker.io/v1/', credentialsId: 'docker-hub-credentials']) {
                     sh 'docker push $DOCKER_IMAGE:$COMMIT_ID'
+                    
                 }
             }
         }
