@@ -1,19 +1,33 @@
 pipeline {
-    agent any  // Chạy trên bất kỳ agent nào có sẵn
+    agent any
+    environment {
+        DOCKER_IMAGE = 'thienbanho/petclinic'
+        COMMIT_ID = "${env.GIT_COMMIT}"
+    }
     stages {
-        stage('Build') {
+        stage('Clone Repository') {
             steps {
-                echo 'Building...'
+                git 'https://github.com/spring-petclinic/spring-petclinic-microservices.git'
             }
         }
-        stage('Test') {
+        stage('Build Docker Image') {
             steps {
-                echo 'Testing...'
+                sh 'docker build -t $DOCKER_IMAGE:$COMMIT_ID .'
             }
         }
-        stage('Deploy') {
+        stage('Push to Docker Hub') {
             steps {
-                echo 'Deploying...'
+                withDockerRegistry([credentialsId: 'docker-hub-credentials']) {
+                    sh 'docker push $DOCKER_IMAGE:$COMMIT_ID'
+                }
+            }
+        }
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh '''
+                kubectl set image deployment/petclinic petclinic=$DOCKER_IMAGE:$COMMIT_ID -n petclinic
+                kubectl rollout status deployment/petclinic -n petclinic
+                '''
             }
         }
     }
