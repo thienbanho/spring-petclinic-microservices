@@ -1,40 +1,151 @@
 pipeline {
     agent any
-    environment {
-        DOCKER_IMAGE = 'thienbanho/petclinic'
-        COMMIT_ID = "${env.GIT_COMMIT ?: 'latest'}"  // Nếu env.GIT_COMMIT null thì dùng 'latest'
-        ARTIFACT_NAME = "spring-petclinic"  // Đặt giá trị phù hợp với tên file .jar
+
+    parameters {
+        string(name: 'CUSTOMERS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for customers-service')
+        string(name: 'VISITS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for visits-service')
+        string(name: 'VETS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for vets-service')
+        string(name: 'GENAI_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for genai-service')
     }
+
+    environment {
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+        SERVICES = "customers-service visits-service vets-service genai-service admin-server config-server api-gateway discovery-server"
+    }
+
     stages {
-        stage('Clone Repository') {
+        stage('Checkout Code') {
             steps {
-                git branch: 'main', credentialsId: 'github-credentials-id', url: 'https://github.com/thienbanho/spring-petclinic-microservices.git'
-            }
-        }
-        stage('Build Java Application') {
-            steps {
-                sh './mvnw clean package -DskipTests'
-            }
-        }
-        stage('Build Docker Image') {
-            steps {
-                sh 'docker build --build-arg ARTIFACT_NAME=spring-petclinic -t $DOCKER_IMAGE:$COMMIT_ID -f docker/Dockerfile .'
-            }
-        }
-        stage('Push to Docker Hub') {
-            steps {
-                withDockerRegistry([url: '', credentialsId: 'docker-hub-credentials']) {  // URL trống là mặc định Docker Hub
-                    sh 'docker push $DOCKER_IMAGE:$COMMIT_ID'
+                script {
+                    COMMIT_IDS = [:]
+                    def branchMap = [
+                        'customers-service': params.CUSTOMERS_SERVICE_BRANCH,
+                        'visits-service'   : params.VISITS_SERVICE_BRANCH,
+                        'vets-service'     : params.VETS_SERVICE_BRANCH,
+                        'genai-service'    : params.GENAI_SERVICE_BRANCH,
+                        'admin-server'     : 'main',
+                        'config-server'    : 'main',
+                        'api-gateway'      : 'main',
+                        'discovery-server' : 'main'
+                    ]
+                    SERVICES.split().each { service ->
+                        COMMIT_IDS[service] = checkoutService(service, branchMap[service])
+                        echo "Commit ID of ${service}: ${COMMIT_IDS[service]}"
+                    }
                 }
             }
         }
-        stage('Deploy to Kubernetes') {
+
+        stage('Build & Push Docker Images') {
             steps {
-                sh '''
-                kubectl set image deployment/petclinic petclinic=$DOCKER_IMAGE:$COMMIT_ID -n petclinic
-                kubectl rollout status deployment/petclinic -n petclinic
-                '''
+                script {
+                    def portMap = [
+                        'customers-service': '8081',
+                        'visits-service'   : '8082',
+                        'vets-service'     : '8083',
+                        'genai-service'    : '8084',
+                        'admin-server'     : '9090',
+                        'config-server'    : '8888',
+                        'api-gateway'      : '8080',
+                        'discovery-server' : '8761'                    
+                    ]
+
+                    SERVICES.split().each { service ->
+                        def tag = (COMMIT_IDS[service] && COMMIT_IDS[service] != 'main') ? COMMIT_IDS[service] : 'latest'
+                        def port = portMap.get(service, '8080')
+                        buildAndPushDockerImage(service, tag, port)
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes with Helm') {
+            steps {
+                script {
+                    def yaml = SERVICES.split().collect { service ->
+                        def imageTag = COMMIT_IDS[service] ?: 'latest'
+                        def imagePath = "${DOCKERHUB_CREDENTIALS_USR}/spring-petclinic-${service}:${imageTag}"
+                        def serviceBlock = (service == 'api-gateway') ? """
+                          service:
+                            type: NodePort
+                            port: 80
+                            nodePort: 30080
+                        """ : ""
+                        """  ${service}:\n    image: ${imagePath}${serviceBlock}"""
+                    }.join("\n")
+
+                    writeFile file: 'values.yaml', text: "services:\n${yaml}"
+                    sh "helm upgrade --install petclinic ./helm-chart -f values.yaml --namespace developer --create-namespace"
+                }
+            }
+        }
+
+        stage('Provide Access URL') {
+            steps {
+                script {
+                    def ip = sh(script: "minikube ip || kubectl get nodes -o wide | awk 'NR==2{print \$6}'", returnStdout: true).trim()
+                    echo "Access the app at: http://petclinic.local:30080"
+                    echo "Add to /etc/hosts: ${ip} petclinic.local"
+                }
             }
         }
     }
+
+    post {
+        success {
+            echo '✅ Deployment completed successfully!'
+        }
+        failure {
+            echo '❌ Deployment failed!'
+        }
+    }
+}
+
+def checkoutService(String service, String branch) {
+    dir(service) {
+        checkout([
+            $class: 'GitSCM',
+            branches: [[name: "*/${branch}"]],
+            userRemoteConfigs: [[
+                url: "https://github.com/matoupine/spring-petclinic-microservices-cd.git",
+                credentialsId: 'jenkins-petclinic-cd'
+            ]]
+        ])
+        return (branch == 'main') ? 'main' : sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+    }
+}
+
+def buildAndPushDockerImage(String service, String tag, String port) {
+    dir(service) {
+        echo "▶ Building JAR for ${service}"
+        sh '../mvnw clean package -DskipTests'
+
+        def artifactName = getJarArtifactName(service)
+        echo "▶ Found artifact: ${artifactName}.jar"
+
+        echo "🐳 Building Docker image for ${service} with tag ${tag}"
+        sh """
+            docker build -f docker/Dockerfile \\
+                --build-arg ARTIFACT_NAME=${artifactName} \\
+                --build-arg EXPOSED_PORT=${port} \\
+                -t ${DOCKERHUB_CREDENTIALS_USR}/spring-petclinic-${service}:${tag} .
+        """
+
+        echo "📤 Pushing image to Docker Hub"
+        sh """
+            docker login -u ${DOCKERHUB_CREDENTIALS_USR} -p ${DOCKERHUB_CREDENTIALS_PSW}
+            docker push ${DOCKERHUB_CREDENTIALS_USR}/spring-petclinic-${service}:${tag}
+        """
+    }
+}
+
+def getJarArtifactName(String service) {
+    dir(service) {
+        def jarPath = sh(
+        script: "ls target/*.jar | grep -v 'original' | head -n 1",
+            returnStdout: true
+        ).trim()
+    }
+
+    return jarPath.replaceFirst(/^target\//, '').replaceFirst(/\.jar$/, '')
 }
