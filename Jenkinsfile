@@ -36,30 +36,30 @@ pipeline {
             }
         }
 
-        stage('Build & Push Docker Images') {
-            steps {
-                script {
-                    SERVICES.split().each { service ->
-                        def tag = (COMMIT_IDS[service] && COMMIT_IDS[service] != 'main') ? COMMIT_IDS[service] : 'latest'
-                        def moduleName = "spring-petclinic-${service}"
-                        def sourceImage = "springcommunity/${moduleName}:latest"
-                        def targetImage = "${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${tag}"
+        // stage('Build & Push Docker Images') {
+        //     steps {
+        //         script {
+        //             SERVICES.split().each { service ->
+        //                 def tag = (COMMIT_IDS[service] && COMMIT_IDS[service] != 'main') ? COMMIT_IDS[service] : 'latest'
+        //                 def moduleName = "spring-petclinic-${service}"
+        //                 def sourceImage = "springcommunity/${moduleName}:latest"
+        //                 def targetImage = "${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${tag}"
 
-                        echo "🐳 Building Docker image for ${service} using Maven"
-                        sh "./mvnw clean install -PbuildDocker -pl ${moduleName}"
+        //                 echo "🐳 Building Docker image for ${service} using Maven"
+        //                 sh "./mvnw clean install -PbuildDocker -pl ${moduleName}"
 
-                        echo "🔐 Logging in to Docker Hub"
-                        sh "echo '${DOCKERHUB_CREDENTIALS_PSW}' | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin"
+        //                 echo "🔐 Logging in to Docker Hub"
+        //                 sh "echo '${DOCKERHUB_CREDENTIALS_PSW}' | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin"
 
-                        echo "🏷️ Tagging image: ${sourceImage} -> ${targetImage}"
-                        sh "docker tag ${sourceImage} ${targetImage}"
+        //                 echo "🏷️ Tagging image: ${sourceImage} -> ${targetImage}"
+        //                 sh "docker tag ${sourceImage} ${targetImage}"
 
-                        echo "📤 Pushing ${targetImage} to Docker Hub"
-                        sh "docker push ${targetImage}"
-                    }
-                }
-            }
-        }
+        //                 echo "📤 Pushing ${targetImage} to Docker Hub"
+        //                 sh "docker push ${targetImage}"
+        //             }
+        //         }
+        //     }
+        // }
 
         stage('Deploy to Kubernetes with Helm') {
             steps {
