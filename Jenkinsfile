@@ -107,7 +107,7 @@ def checkoutService(String service, String branch) {
             $class: 'GitSCM',
             branches: [[name: "*/${branch}"]],
             userRemoteConfigs: [[
-                url: "https://github.com/thienbanho/spring-petclinic-microservices-cd.git",
+                url: "https://github.com/thienbanho/spring-petclinic-microservices.git",
                 credentialsId: 'jenkins-petclinic-dthien'
             ]]
         ])
