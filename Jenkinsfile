@@ -56,6 +56,7 @@ pipeline {
 
                         echo "📤 Pushing ${targetImage} to Docker Hub"
                         sh "docker push ${targetImage}"
+                    }
                 }
             }
         }
