@@ -108,7 +108,7 @@ def checkoutService(String service, String branch) {
             branches: [[name: "*/${branch}"]],
             userRemoteConfigs: [[
                 url: "https://github.com/thienbanho/spring-petclinic-microservices-cd.git",
-                credentialsId: 'jenkins-petclinic-cd'
+                credentialsId: 'jenkins-petclinic-dthien'
             ]]
         ])
         return (branch == 'main') ? 'main' : sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
