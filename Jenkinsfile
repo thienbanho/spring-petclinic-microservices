@@ -39,22 +39,23 @@ pipeline {
         stage('Build & Push Docker Images') {
             steps {
                 script {
-                    def portMap = [
-                        'customers-service': '8081',
-                        'visits-service'   : '8082',
-                        'vets-service'     : '8083',
-                        'genai-service'    : '8084',
-                        'admin-server'     : '9090',
-                        'config-server'    : '8888',
-                        'api-gateway'      : '8080',
-                        'discovery-server' : '8761'                    
-                    ]
-
                     SERVICES.split().each { service ->
                         def tag = (COMMIT_IDS[service] && COMMIT_IDS[service] != 'main') ? COMMIT_IDS[service] : 'latest'
-                        def port = portMap.get(service, '8080')
-                        buildAndPushDockerImage(service, tag, port)
-                    }
+                        def moduleName = "spring-petclinic-${service}"
+                        def sourceImage = "springcommunity/${moduleName}:latest"
+                        def targetImage = "${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${tag}"
+
+                        echo "🐳 Building Docker image for ${service} using Maven"
+                        sh "./mvnw clean install -PbuildDocker -pl ${moduleName}"
+
+                        echo "🔐 Logging in to Docker Hub"
+                        sh "echo '${DOCKERHUB_CREDENTIALS_PSW}' | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin"
+
+                        echo "🏷️ Tagging image: ${sourceImage} -> ${targetImage}"
+                        sh "docker tag ${sourceImage} ${targetImage}"
+
+                        echo "📤 Pushing ${targetImage} to Docker Hub"
+                        sh "docker push ${targetImage}"
                 }
             }
         }
