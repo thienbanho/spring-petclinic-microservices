@@ -118,7 +118,7 @@ def checkoutService(String service, String branch) {
 def buildAndPushDockerImage(String service, String tag, String port) {
     dir(service) {
         echo "▶ Building JAR for ${service}"
-        sh '../mvnw clean package -DskipTests'
+        sh '../mvnw clean install -PbuildDocker -pl spring-petclinic-${service} -DskipTests'
 
         def artifactName = getJarArtifactName(service)
         echo "▶ Found artifact: ${artifactName}.jar"
