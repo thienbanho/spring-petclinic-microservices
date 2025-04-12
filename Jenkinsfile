@@ -1,12 +1,12 @@
 pipeline {
     agent any
 
-    parameters {
-        string(name: 'CUSTOMERS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for customers-service')
-        string(name: 'VISITS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for visits-service')
-        string(name: 'VETS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for vets-service')
-        string(name: 'GENAI_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for genai-service')
-    }
+    // parameters {
+    //     string(name: 'CUSTOMERS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for customers-service')
+    //     string(name: 'VISITS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for visits-service')
+    //     string(name: 'VETS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for vets-service')
+    //     string(name: 'GENAI_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for genai-service')
+    // }
 
     environment {
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
@@ -23,10 +23,10 @@ pipeline {
                     SHOULD_BUILD = [:]
 
                     def branchMap = [
-                        'customers-service': params.CUSTOMERS_SERVICE_BRANCH,
-                        'visits-service'   : params.VISITS_SERVICE_BRANCH,
-                        'vets-service'     : params.VETS_SERVICE_BRANCH,
-                        'genai-service'    : params.GENAI_SERVICE_BRANCH,
+                        'customers-service': 'main',
+                        'visits-service'   : 'main',
+                        'vets-service'     : 'main',
+                        'genai-service'    : 'main',
                         'admin-server'     : 'main',
                         'config-server'    : 'main',
                         'api-gateway'      : 'main',
@@ -51,12 +51,11 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                githubNotify context: 'jenkins-ci', 
-                           description: 'Jenkins Pipeline Started',
-                           status: 'PENDING'
                 checkout scm
+                echo "✅ Checked out source code."
             }
         }
+
 
         // stage('Build, Verify & Push Docker Images') {
         //     steps {
