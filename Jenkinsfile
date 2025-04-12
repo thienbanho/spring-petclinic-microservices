@@ -1,136 +1,272 @@
 pipeline {
     agent any
-
-    parameters {
-        string(name: 'CUSTOMERS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for customers-service')
-        string(name: 'VISITS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for visits-service')
-        string(name: 'VETS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for vets-service')
-        string(name: 'GENAI_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for genai-service')
-    }
-
+    
     environment {
+        MAVEN_HOME = tool 'Maven'
+        GITHUB_TOKEN = credentials('github-token')
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
-        SERVICES = "customers-service visits-service vets-service genai-service admin-server config-server api-gateway discovery-server"
+        SERVICES = "admin-server api-gateway config-server customers-service discovery-server vets-service visits-service genai-service"
+        // Thêm URL GitHub repository
+        GITHUB_REPO_URL = "https://github.com/thienbanho/spring-petclinic-microservices.git"
+        // Thêm credentials để clone repository nếu cần
+        GITHUB_CREDENTIALS_ID = 'jenkins-petclinic-dthien'
     }
-
+    
     stages {
-        stage('Checkout Code & Check Changes') {
+        stage('Checkout') {
+            steps {
+                githubNotify context: 'jenkins-ci', 
+                           description: 'Jenkins Pipeline Started',
+                           status: 'PENDING'
+                
+                // Checkout repository sử dụng URL đã định nghĩa
+                checkout([
+                    $class: 'GitSCM', 
+                    branches: [[name: '*/main']], 
+                    doGenerateSubmoduleConfigurations: false, 
+                    extensions: [], 
+                    submoduleCfg: [], 
+                    userRemoteConfigs: [[
+                        credentialsId: "${GITHUB_CREDENTIALS_ID}", 
+                        url: "${GITHUB_REPO_URL}"
+                    ]]
+                ])
+                
+                // In ra commit hiện tại
+                sh "git rev-parse HEAD"
+            }
+        }
+        
+        stage('Detect Changes') {
             steps {
                 script {
-                    COMMIT_IDS = [:]
-                    SHOULD_BUILD = [:]
+                    // Debug: Print all environment variables
+                    echo "Environment variables:"
+                    sh 'env | sort'
+                    
+                    // Get all changed files
+                    def changes = []
+                    if (env.CHANGE_TARGET) {
+                        // If this is a PR build, fetch the target branch first
+                        sh """
+                            git fetch --no-tags origin ${env.CHANGE_TARGET}:refs/remotes/origin/${env.CHANGE_TARGET}
+                            git fetch --no-tags origin ${env.GIT_COMMIT}:refs/remotes/origin/PR-${env.CHANGE_ID}
+                        """
+                        changes = sh(script: "git diff --name-only origin/${env.CHANGE_TARGET} HEAD", returnStdout: true).trim().split('\n')
+                    } else if (env.GIT_PREVIOUS_SUCCESSFUL_COMMIT) {
+                        // If this is a branch build with previous successful build
+                        changes = sh(script: "git diff --name-only ${env.GIT_PREVIOUS_SUCCESSFUL_COMMIT}", returnStdout: true).trim().split('\n')
+                    } else {
+                        // Fallback to comparing with the previous commit
+                        changes = sh(script: "git diff --name-only HEAD^", returnStdout: true).trim().split('\n')
+                    }
 
-                    def branchMap = [
-                        'customers-service': params.CUSTOMERS_SERVICE_BRANCH,
-                        'visits-service'   : params.VISITS_SERVICE_BRANCH,
-                        'vets-service'     : params.VETS_SERVICE_BRANCH,
-                        'genai-service'    : params.GENAI_SERVICE_BRANCH,
-                        'admin-server'     : 'main',
-                        'config-server'    : 'main',
-                        'api-gateway'      : 'main',
-                        'discovery-server' : 'main'
+                    // Map to store which services need to be built
+                    def servicesToBuild = [:]
+                    def services = [
+                        'admin-server': 'spring-petclinic-admin-server',
+                        'api-gateway': 'spring-petclinic-api-gateway',
+                        'config-server': 'spring-petclinic-config-server',
+                        'customers-service': 'spring-petclinic-customers-service',
+                        'discovery-server': 'spring-petclinic-discovery-server',
+                        'vets-service': 'spring-petclinic-vets-service',
+                        'visits-service': 'spring-petclinic-visits-service',
+                        'genai-service': 'spring-petclinic-genai-service'
                     ]
 
-                    SERVICES.split().each { service ->
-                        def branch = branchMap[service]
-                        def commitId = checkoutService(service, branch)
-                        COMMIT_IDS[service] = commitId
-
-                        // Check if image with this commit already exists
-                        def imageTag = "${DOCKERHUB_CREDENTIALS_USR}/spring-petclinic-${service}:${commitId}"
-                        def exists = sh(script: "docker pull ${imageTag} > /dev/null 2>&1 || echo 'missing'", returnStdout: true).trim()
-
-                        SHOULD_BUILD[service] = (exists == 'missing')
-                        echo "⏱️ Should build ${service}? ${SHOULD_BUILD[service]}"
+                    // Check root pom.xml changes
+                    boolean rootPomChanged = changes.any { it == 'pom.xml' }
+                    
+                    // Check shared resources changes (like docker configs, scripts, etc.)
+                    boolean sharedResourcesChanged = changes.any { change ->
+                        change.startsWith('docker/') || 
+                        change.startsWith('scripts/') || 
+                        change.startsWith('.mvn/') ||
+                        change == 'docker-compose.yml'
                     }
-                }
-            }
-        }
 
-        stage('Build, Verify & Push Docker Images') {
-            steps {
-                script {
-                    SERVICES.split().each { service ->
-                        if (!SHOULD_BUILD[service]) {
-                            echo "⏭️ Skipping ${service}, already built."
-                            return
+                    // If shared resources changed, build all services
+                    if (rootPomChanged || sharedResourcesChanged) {
+                        echo "Shared resources changed. Building all services."
+                        services.each { serviceKey, servicePath ->
+                            servicesToBuild[serviceKey] = true
                         }
+                    } else {
+                        // Determine which services have changes
+                        services.each { serviceKey, servicePath ->
+                            if (changes.any { change ->
+                                change.startsWith("${servicePath}/")
+                            }) {
+                                servicesToBuild[serviceKey] = true
+                                echo "Will build ${serviceKey} due to changes in ${servicePath}"
+                            }
+                        }
+                    }
 
-                        def commitId = COMMIT_IDS[service]
-                        def moduleName = "spring-petclinic-${service}"
-                        def targetImage = "${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${commitId}"
-
-                        echo "🔍 Verifying ${service}"
-                        sh "./mvnw -pl ${moduleName} verify"
-
-                        echo "🐳 Building Docker image for ${service}"
-                        sh "./mvnw clean install -PbuildDocker -pl ${moduleName}"
-
-                        echo "🔐 Logging in to Docker Hub"
-                        sh "echo '${DOCKERHUB_CREDENTIALS_PSW}' | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin"
-
-                        echo "🏷️ Tagging image as ${targetImage}"
-                        sh "docker tag springcommunity/${moduleName}:latest ${targetImage}"
-
-                        echo "📤 Pushing ${targetImage} to Docker Hub"
-                        sh "docker push ${targetImage}"
+                    // If no services need building, set a flag
+                    env.NO_SERVICES_TO_BUILD = servicesToBuild.isEmpty() ? 'true' : 'false'
+                    
+                    // Nếu không có service nào thay đổi, thiết lập một giá trị mặc định
+                    if (servicesToBuild.isEmpty()) {
+                        // Build tất cả service trong trường hợp đầu tiên chạy
+                        servicesToBuild = services.collectEntries { serviceKey, _ -> 
+                            [(serviceKey): true] 
+                        }
+                        env.NO_SERVICES_TO_BUILD = 'false'
+                        echo "First run or no specific changes detected. Will build all services."
+                    }
+                    
+                    // Store the services to build in environment variable
+                    env.SERVICES_TO_BUILD = servicesToBuild.keySet().join(',')
+                    
+                    // Print summary
+                    echo "Services to build: ${env.SERVICES_TO_BUILD}"
+                }
+            }
+        }
+        
+        stage('Build') {
+            when {
+                expression { env.NO_SERVICES_TO_BUILD == 'false' }
+            }
+            steps {
+                script {
+                    env.SERVICES_TO_BUILD.split(',').each { service ->
+                        dir("spring-petclinic-${service}") {
+                            echo "Building ${service}..."
+                            try {
+                                sh """
+                                    echo "Building ${service}"
+                                    ../mvnw clean package -DskipTests
+                                """
+                            } catch (Exception e) {
+                                echo "Build failed for ${service}"
+                                throw e
+                            }
+                        }
+                    }
+                }
+            }
+            post {
+                success {
+                    script {
+                        // Archive artifacts for changed services
+                        env.SERVICES_TO_BUILD.split(',').each { service ->
+                            dir("spring-petclinic-${service}") {
+                                archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
+                            }
+                        }
                     }
                 }
             }
         }
-
-        stage('Deploy to Kubernetes with Helm') {
+        
+        stage('Build & Push Docker Images') {
+            when {
+                expression { env.NO_SERVICES_TO_BUILD == 'false' }
+            }
             steps {
                 script {
-                    def yaml = SERVICES.split().collect { service ->
-                        def imageTag = COMMIT_IDS[service]
-                        def imagePath = "${DOCKERHUB_CREDENTIALS_USR}/spring-petclinic-${service}:${imageTag}"
-                        def serviceBlock = (service == 'api-gateway') ? """
-                          service:
-                            type: NodePort
-                            port: 80
-                            nodePort: 30080
-                        """ : ""
-                        """  ${service}:\n    image: ${imagePath}${serviceBlock}"""
-                    }.join("\n")
-
-                    writeFile file: 'values.yaml', text: "services:\n${yaml}"
-                    sh "helm upgrade --install petclinic ./helm-chart -f values.yaml --namespace developer --create-namespace"
+                    // Login to Docker Hub
+                    sh "echo '${DOCKERHUB_CREDENTIALS_PSW}' | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin"
+                    
+                    env.SERVICES_TO_BUILD.split(',').each { service ->
+                        def moduleName = "spring-petclinic-${service}"
+                        
+                        // Get commit ID for tagging
+                        def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                        def targetImage = "${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${commitId}"
+                        
+                        // Check if image with this commit already exists
+                        def exists = sh(script: "docker pull ${targetImage} > /dev/null 2>&1 || echo 'missing'", returnStdout: true).trim()
+                        
+                        if (exists == 'missing') {
+                            echo "🐳 Building Docker image for ${service}"
+                            sh "./mvnw clean install -PbuildDocker -pl ${moduleName}"
+                            
+                            echo "🏷️ Tagging image as ${targetImage}"
+                            sh "docker tag springcommunity/${moduleName}:latest ${targetImage}"
+                            
+                            echo "📤 Pushing ${targetImage} to Docker Hub"
+                            sh "docker push ${targetImage}"
+                            
+                            // Thêm tag latest
+                            def latestImage = "${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:latest"
+                            sh "docker tag ${targetImage} ${latestImage}"
+                            sh "docker push ${latestImage}"
+                            
+                            echo "✅ Docker image cho ${service} đã được đẩy lên: ${targetImage} và ${latestImage}"
+                        } else {
+                            echo "⏭️ Skipping ${service}, Docker image ${targetImage} already exists."
+                        }
+                    }
                 }
             }
         }
-
-        stage('Provide Access URL') {
+        
+        stage('Generate Deployment Summary') {
+            when {
+                expression { env.NO_SERVICES_TO_BUILD == 'false' }
+            }
             steps {
                 script {
-                    def ip = sh(script: "minikube ip || kubectl get nodes -o wide | awk 'NR==2{print \$6}'", returnStdout: true).trim()
-                    echo "Access the app at: http://petclinic.local:30080"
-                    echo "Add to /etc/hosts: ${ip} petclinic.local"
+                    def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    def fullCommitId = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                    def commitMsg = sh(script: 'git log -1 --pretty=format:"%s"', returnStdout: true).trim()
+                    def commitAuthor = sh(script: 'git log -1 --pretty=format:"%an <%ae>"', returnStdout: true).trim()
+                    def commitDate = sh(script: 'git log -1 --pretty=format:"%ad" --date=iso', returnStdout: true).trim()
+                    
+                    def summary = """
+                    ==================== DEPLOYMENT SUMMARY ====================
+                    Commit: ${fullCommitId} (${commitId})
+                    Author: ${commitAuthor}
+                    Date: ${commitDate}
+                    Message: ${commitMsg}
+                    
+                    Services deployed:
+                    """
+                    
+                    env.SERVICES_TO_BUILD.split(',').each { service ->
+                        def moduleName = "spring-petclinic-${service}"
+                        def imageTag = "${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${commitId}"
+                        summary += """    - ${service}: ${imageTag}
+                    """
+                    }
+                    
+                    summary += """
+                    =============================================================
+                    """
+                    
+                    echo summary
+                    
+                    // Lưu summary vào một file
+                    writeFile file: 'deployment-summary.txt', text: summary
+                    archiveArtifacts artifacts: 'deployment-summary.txt', fingerprint: true
                 }
             }
         }
     }
-
+    
     post {
         success {
+            githubNotify context: 'jenkins-ci',
+                        description: 'Pipeline completed successfully',
+                        status: 'SUCCESS'
+            cleanWs()
             echo '✅ Deployment completed successfully!'
         }
         failure {
+            githubNotify context: 'jenkins-ci',
+                        description: 'Pipeline failed',
+                        status: 'FAILURE'
+            cleanWs()
             echo '❌ Deployment failed!'
         }
-    }
-}
-
-def checkoutService(String service, String branch) {
-    dir(service) {
-        checkout([
-            $class: 'GitSCM',
-            branches: [[name: "*/${branch}"]],
-            userRemoteConfigs: [[
-                url: "https://github.com/thienbanho/spring-petclinic-microservices.git",
-                credentialsId: 'jenkins-petclinic-dthien'
-            ]]
-        ])
-        return sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+        unstable {
+            githubNotify context: 'jenkins-ci',
+                        description: 'Pipeline is unstable',
+                        status: 'ERROR'
+            cleanWs()
+        }
     }
 }
