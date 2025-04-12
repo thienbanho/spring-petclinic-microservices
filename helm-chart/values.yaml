@@ -1,0 +1,31 @@
+replicaCount: 1
+
+services:
+  - name: discovery-server
+    image: thienbanho/spring-petclinic-discovery-server
+    port: 8761
+  - name: config-server
+    image: thienbanho/spring-petclinic-config-server
+    port: 8888
+  - name: admin-server
+    image: thienbanho/spring-petclinic-admin-server
+    port: 9100
+  - name: api-gateway
+    image: thienbanho/spring-petclinic-api-gateway
+    port: 8080
+  - name: customers-service
+    image: thienbanho/spring-petclinic-customers-service
+    port: 8081
+  - name: genai-service
+    image: petclinic-genai-service:local
+    port: 8082
+  - name: vets-service
+    image: thienbanho/spring-petclinic-vets-service
+    port: 8083
+  - name: visits-service
+    image: thienbanho/spring-petclinic-visits-service
+    port: 8084
+
+service:
+  type: NodePort
+  nodePort: 30080  # Cổng NodePort cho API-Gateway (có thể thay đổi nếu cần)
