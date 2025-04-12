@@ -15,14 +15,6 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
-            steps {
-                githubNotify context: 'jenkins-ci', 
-                           description: 'Jenkins Pipeline Started',
-                           status: 'PENDING'
-                checkout scm
-            }
-        }
 
         stage('Checkout Code & Check Changes') {
             steps {
@@ -54,6 +46,15 @@ pipeline {
                         echo "⏱️ Should build ${service}? ${SHOULD_BUILD[service]}"
                     }
                 }
+            }
+        }
+
+        stage('Checkout') {
+            steps {
+                githubNotify context: 'jenkins-ci', 
+                           description: 'Jenkins Pipeline Started',
+                           status: 'PENDING'
+                checkout scm
             }
         }
 
