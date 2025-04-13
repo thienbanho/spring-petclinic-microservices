@@ -137,7 +137,7 @@ pipeline {
             }
         }
 
-        tage('Build') {
+        stage('Build') {
             when {
                 expression { env.NO_SERVICES_TO_BUILD == 'false' }
             }
