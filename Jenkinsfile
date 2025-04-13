@@ -137,6 +137,42 @@ pipeline {
             }
         }
 
+        tage('Build') {
+            when {
+                expression { env.NO_SERVICES_TO_BUILD == 'false' }
+            }
+            steps {
+                script {
+                    env.SERVICES_TO_BUILD.split(',').each { service ->
+                        dir("spring-petclinic-${service}") {
+                            echo "Building ${service}..."
+                            try {
+                                sh """
+                                    echo "Building ${service}"
+                                    ../mvnw clean package -DskipTests
+                                """
+                            } catch (Exception e) {
+                                echo "Build failed for ${service}"
+                                throw e
+                            }
+                        }
+                    }
+                }
+            }
+            post {
+                success {
+                    script {
+                        // Archive artifacts for changed services
+                        env.SERVICES_TO_BUILD.split(',').each { service ->
+                            dir("spring-petclinic-${service}") {
+                                archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
 
         // stage('Build, Verify & Push Docker Images') {
         //     steps {
