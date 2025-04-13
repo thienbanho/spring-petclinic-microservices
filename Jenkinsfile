@@ -156,29 +156,29 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes') {
-            when {
-                expression { return !SERVICES_TO_BUILD.isEmpty() && params.DEPLOY_TO_K8S }
-            }
-            steps {
-                script {
-                    echo "🚀 Triển khai các service đã thay đổi lên Kubernetes"
-                    def yaml = SERVICES_TO_BUILD.collect { service, info ->
-                        def imagePath = "${DOCKERHUB_CREDENTIALS_USR}/spring-petclinic-${service}:${info.commitId}"
-                        def serviceBlock = (service == 'api-gateway') ? """
-                          service:
-                            type: NodePort
-                            port: 80
-                            nodePort: 30080
-                        """ : ""
-                        """  ${service}:\n    image: ${imagePath}${serviceBlock}"""
-                    }.join("\n")
+        // stage('Deploy to Kubernetes') {
+        //     when {
+        //         expression { return !SERVICES_TO_BUILD.isEmpty() && params.DEPLOY_TO_K8S }
+        //     }
+        //     steps {
+        //         script {
+        //             echo "🚀 Triển khai các service đã thay đổi lên Kubernetes"
+        //             def yaml = SERVICES_TO_BUILD.collect { service, info ->
+        //                 def imagePath = "${DOCKERHUB_CREDENTIALS_USR}/spring-petclinic-${service}:${info.commitId}"
+        //                 def serviceBlock = (service == 'api-gateway') ? """
+        //                   service:
+        //                     type: NodePort
+        //                     port: 80
+        //                     nodePort: 30080
+        //                 """ : ""
+        //                 """  ${service}:\n    image: ${imagePath}${serviceBlock}"""
+        //             }.join("\n")
                     
-                    writeFile file: 'values.yaml', text: "services:\n${yaml}"
-                    sh "helm upgrade --install petclinic ./helm-chart -f values.yaml --namespace developer --create-namespace"
-                }
-            }
-        }
+        //             writeFile file: 'values.yaml', text: "services:\n${yaml}"
+        //             sh "helm upgrade --install petclinic ./helm-chart -f values.yaml --namespace developer --create-namespace"
+        //         }
+        //     }
+        // }
     }
 
     post {
