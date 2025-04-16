@@ -1,31 +1,71 @@
-replicaCount: 1
+namespace: petclinic
 
 services:
   - name: discovery-server
     image: thienbanho/spring-petclinic-discovery-server
     port: 8761
+    tag: "latest"
+    containerName: discovery-server
   - name: config-server
     image: thienbanho/spring-petclinic-config-server
     port: 8888
+    tag: "latest"
+    containerName: config-server
   - name: admin-server
     image: thienbanho/spring-petclinic-admin-server
     port: 9100
+    tag: "latest"
+    containerName: admin-server
   - name: api-gateway
     image: thienbanho/spring-petclinic-api-gateway
     port: 8080
+    tag: "latest"
+    containerName: api-gateway
+    ingress:
+      enabled: true
+      host: petclinic-dev.com
   - name: customers-service
     image: thienbanho/spring-petclinic-customers-service
     port: 8081
+    tag: "latest"
+    containerName: customers-service
   - name: genai-service
-    image: petclinic-genai-service:local
+    image: thienbanho/spring-petclinic-genai-service
     port: 8082
+    tag: "latest"
+    containerName: genai-service
   - name: vets-service
     image: thienbanho/spring-petclinic-vets-service
     port: 8083
+    tag: "latest"
+    containerName: vets-service
   - name: visits-service
     image: thienbanho/spring-petclinic-visits-service
     port: 8084
+    tag: "latest"
+    containerName: visits-service
+
+replicaCount: 1
 
 service:
-  type: NodePort
-  nodePort: 30080  # Cổng NodePort cho API-Gateway (có thể thay đổi nếu cần)
+  type: ClusterIP
+  port: 9090
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+image:
+  repository: thienbanho/spring-petclinic-admin-server
+  pullPolicy: Always
+  tag: "latest"
+
+
+

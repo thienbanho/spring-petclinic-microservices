@@ -13,7 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  * test customer service 5
+ * 
+ * helm upgrade --install config-server ./helm-chart -n petclinic --create-namespace --set image.repository=thienbanho/spring-petclinic-config-server --set image.tag=latest
  */
+ 
 package org.springframework.samples.petclinic.customers;
 
 import org.springframework.boot.SpringApplication;

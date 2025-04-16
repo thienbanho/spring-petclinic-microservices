@@ -143,7 +143,10 @@ pipeline {
                             def targetImage = "${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${info.commitId}"
                             
                             echo "🐳 Building Docker image cho ${service}"
-                            sh "./mvnw clean install -PbuildDocker -pl ${moduleName}"
+                            //sh "docker build -f docker/Dockerfile --build-arg ARTIFACT_NAME=${service}-${version} -t ${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${info.commitId} ${moduleName}/target"
+                            sh "docker build -f docker/Dockerfile --build-arg ARTIFACT_NAME=${service}-latest -t ${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${info.commitId} ${moduleName}/target"
+                            
+                            //sh "./mvnw clean install -PbuildDocker -pl ${moduleName}"
                             
                             echo "🏷️ Gắn tag cho image: ${targetImage}"
                             sh "docker tag springcommunity/${moduleName}:latest ${targetImage}"
