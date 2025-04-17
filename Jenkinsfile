@@ -127,6 +127,23 @@ pipeline {
             }
         }
 
+        stage('Build JAR Files') {
+            when {
+                expression { return !SERVICES_TO_BUILD.isEmpty() }
+            }
+            steps {
+                script {
+                    SERVICES_TO_BUILD.each { service, info ->
+                        if (info.shouldBuild) {
+                            def moduleName = "spring-petclinic-${service}"
+                            echo "🔨 Building JAR cho module: ${moduleName}"
+                            sh "./mvnw clean package -pl ${moduleName} -am -DskipTests"
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Build and Push Docker Images') {
             when {
                 expression { return !SERVICES_TO_BUILD.isEmpty() }
@@ -141,7 +158,12 @@ pipeline {
                         if (info.shouldBuild) {
                             def moduleName = "spring-petclinic-${service}"
                             def targetImage = "${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${info.commitId}"
-                            
+                            def jarFilePath = "${moduleName}/target/${service}-latest.jar"
+
+                            echo "📦 Kiểm tra file JAR: ${jarFilePath}"
+                            if (!fileExists(jarFilePath)) {
+                                error "❌ Không tìm thấy file JAR: ${jarFilePath}. Hãy đảm bảo đã build trước đó."
+                            }
                             echo "🐳 Building Docker image cho ${service}"
                             //sh "docker build -f docker/Dockerfile --build-arg ARTIFACT_NAME=${service}-${version} -t ${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${info.commitId} ${moduleName}/target"
                             sh "docker build -f docker/Dockerfile --build-arg ARTIFACT_NAME=${service}-latest -t ${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${info.commitId} ${moduleName}/target"
@@ -149,10 +171,13 @@ pipeline {
                             //sh "./mvnw clean install -PbuildDocker -pl ${moduleName}"
                             
                             echo "🏷️ Gắn tag cho image: ${targetImage}"
-                            sh "docker tag springcommunity/${moduleName}:latest ${targetImage}"
+                            //sh "docker tag springcommunity/${moduleName}:latest ${targetImage}"
                             
                             echo "📤 Đẩy image ${targetImage} lên Docker Hub"
                             sh "docker push ${targetImage}"
+
+                            sh "docker rmi ${targetImage} || true"
+
                         }
                     }
                 }
