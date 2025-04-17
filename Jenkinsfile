@@ -60,7 +60,7 @@ pipeline {
                     
                     // Nếu tài nguyên dùng chung thay đổi, build tất cả các service
                     if (rootPomChanged || sharedResourcesChanged) {
-                        echo "⚠️ Phát hiện thay đổi trong tài nguyên dùng chung. Cần build lại tất cả service."
+                        echo "Phát hiện thay đổi trong tài nguyên dùng chung. Cần build lại tất cả service."
                         SERVICES.split().each { service ->
                             def commitId = getCommitId(serviceModuleMap[service])
                             SERVICES_TO_BUILD[service] = [
@@ -78,16 +78,16 @@ pipeline {
                                     'commitId': commitId,
                                     'shouldBuild': shouldRebuildImage(commitId, service)
                                 ]
-                                echo "🔍 Phát hiện thay đổi trong service: ${service}"
+                                echo "Phát hiện thay đổi trong service: ${service}"
                             }
                         }
                     }
                     
                     // Hiển thị tóm tắt
                     if (SERVICES_TO_BUILD.isEmpty()) {
-                        echo "✅ Không phát hiện thay đổi nào. Bỏ qua các bước build và deploy."
+                        echo "Không phát hiện thay đổi nào. Bỏ qua các bước build và deploy."
                     } else {
-                        echo "📋 Danh sách service cần build: ${SERVICES_TO_BUILD.keySet().join(', ')}"
+                        echo "Danh sách service cần build: ${SERVICES_TO_BUILD.keySet().join(', ')}"
                         SERVICES_TO_BUILD.each { service, info ->
                             echo "  - ${service}: commit=${info.commitId}, shouldBuild=${info.shouldBuild}"
                         }
@@ -105,10 +105,10 @@ pipeline {
                     SERVICES_TO_BUILD.each { service, info ->
                         if (info.shouldBuild) {
                             def moduleName = "spring-petclinic-${service}"
-                            echo "🔨 Building và testing ${service}..."
+                            echo "Building và testing ${service}..."
                             sh "./mvnw -pl ${moduleName} verify"
                         } else {
-                            echo "⏭️ Bỏ qua build cho ${service}, image đã tồn tại."
+                            echo "Bỏ qua build cho ${service}, image đã tồn tại."
                         }
                     }
                 }
@@ -136,7 +136,7 @@ pipeline {
                     SERVICES_TO_BUILD.each { service, info ->
                         if (info.shouldBuild) {
                             def moduleName = "spring-petclinic-${service}"
-                            echo "🔨 Building JAR cho module: ${moduleName}"
+                            echo "Building JAR cho module: ${moduleName}"
                             sh "./mvnw clean package -pl ${moduleName} -am -DskipTests"
                         }
                     }
@@ -151,7 +151,7 @@ pipeline {
             steps {
                 script {
                     // Login to Docker Hub once
-                    echo "🔐 Đăng nhập vào Docker Hub"
+                    echo "Đăng nhập vào Docker Hub"
                     sh "echo '${DOCKERHUB_CREDENTIALS_PSW}' | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin"
                     
                     SERVICES_TO_BUILD.each { service, info ->
@@ -161,13 +161,11 @@ pipeline {
                             def jarFilePath = sh(script: "ls ${moduleName}/target/*.jar | head -n 1", returnStdout: true).trim()
                             def artifactName = jarFilePath.tokenize('/').last().replace('.jar', '')
 
-                            echo "📦 Kiểm tra file JAR: ${jarFilePath}"
+                            echo "Kiểm tra file JAR: ${jarFilePath}"
                             if (!fileExists(jarFilePath)) {
-                                error "❌ Không tìm thấy file JAR: ${jarFilePath}. Hãy đảm bảo đã build trước đó."
+                                error "Không tìm thấy file JAR: ${jarFilePath}. Hãy đảm bảo đã build trước đó."
                             }
-                            echo "🐳 Building Docker image cho ${service}"
-                            //sh "docker build -f docker/Dockerfile --build-arg ARTIFACT_NAME=${service}-${version} -t ${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${info.commitId} ${moduleName}/target"
-                            //sh "docker build -f docker/Dockerfile --build-arg ARTIFACT_NAME=${service}-latest -t ${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${info.commitId} ${moduleName}/target"
+                            echo "Building Docker image cho ${service}"
                             sh """
                             docker build \
                             -f docker/Dockerfile \
@@ -175,14 +173,8 @@ pipeline {
                             -t ${targetImage} \
                             ${moduleName}/target
                             """
-                            //sh "./mvnw clean install -PbuildDocker -pl ${moduleName}"
-                            
-                            echo "🏷️ Gắn tag cho image: ${targetImage}"
-                            //sh "docker tag springcommunity/${moduleName}:latest ${targetImage}"
-                            
-                            echo "📤 Đẩy image ${targetImage} lên Docker Hub"
+                            echo "Đẩy image ${targetImage} lên Docker Hub"
                             sh "docker push ${targetImage}"
-
                             sh "docker rmi ${targetImage} || true"
 
                         }
@@ -190,41 +182,17 @@ pipeline {
                 }
             }
         }
-
-        // stage('Deploy to Kubernetes') {
-        //     when {
-        //         expression { return !SERVICES_TO_BUILD.isEmpty() && params.DEPLOY_TO_K8S }
-        //     }
-        //     steps {
-        //         script {
-        //             echo "🚀 Triển khai các service đã thay đổi lên Kubernetes"
-        //             def yaml = SERVICES_TO_BUILD.collect { service, info ->
-        //                 def imagePath = "${DOCKERHUB_CREDENTIALS_USR}/spring-petclinic-${service}:${info.commitId}"
-        //                 def serviceBlock = (service == 'api-gateway') ? """
-        //                   service:
-        //                     type: NodePort
-        //                     port: 80
-        //                     nodePort: 30080
-        //                 """ : ""
-        //                 """  ${service}:\n    image: ${imagePath}${serviceBlock}"""
-        //             }.join("\n")
-                    
-        //             writeFile file: 'values.yaml', text: "services:\n${yaml}"
-        //             sh "helm upgrade --install petclinic ./helm-chart -f values.yaml --namespace developer --create-namespace"
-        //         }
-        //     }
-        // }
     }
 
     post {
         success {
-            echo '✅ CI/CD pipeline hoàn thành thành công!'
+            echo 'CI/CD pipeline hoàn thành thành công!'
         }
         failure {
-            echo '❌ CI/CD pipeline thất bại!'
+            echo 'CI/CD pipeline thất bại!'
         }
         always {
-            echo '🧹 Dọn dẹp workspace...'
+            echo 'Dọn dẹp workspace...'
             cleanWs()
         }
     }
