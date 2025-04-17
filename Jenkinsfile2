@@ -1,1 +1,178 @@
-﻿
+﻿pipeline {
+    agent {
+        kubernetes {
+            yaml '''
+            apiVersion: v1
+            kind: Pod
+            spec:
+              containers:
+              - name: docker
+                image: docker:20.10
+                command:
+                - cat
+                tty: true
+                volumeMounts:
+                - name: dockersock
+                  mountPath: /var/run/docker.sock
+              - name: helm
+                image: alpine/helm:3.9.0
+                command:
+                - cat
+                tty: true
+              volumes:
+              - name: dockersock
+                hostPath:
+                  path: /var/run/docker.sock
+            '''
+        }
+    }
+    parameters {
+        string(name: 'customers_service_branch', defaultValue: 'main', description: 'Branch for customers-service')
+        string(name: 'visits_service_branch', defaultValue: 'main', description: 'Branch for visits-service')
+        string(name: 'vets_service_branch', defaultValue: 'main', description: 'Branch for vets-service')
+        string(name: 'genai_service_branch', defaultValue: 'main', description: 'Branch for genai-service')
+    }
+    stages {
+        stage('Checkout Code') {
+            steps {
+                script {
+                    // Kéo code từ repository (giả sử repository ở GitHub)
+                    def services = [
+                        [name: 'customers-service', branch: params.customers_service_branch],
+                        [name: 'visits-service', branch: params.visits_service_branch],
+                        [name: 'vets-service', branch: params.vets_service_branch],
+                        [name: 'genai-service', branch: params.genai_service_branch]
+                    ]
+                    for (service in services) {
+                        dir(service.name) {
+                            git branch: service.branch, url: "https://github.com/thienbanho/spring-petclinic-${service.name}.git"
+                        }
+                    }
+                    // Kéo các service khác luôn dùng main
+                    dir('discovery-server') {
+                        git branch: 'main', url: 'https://github.com/thienbanho/spring-petclinic-discovery-server.git'
+                    }
+                    dir('config-server') {
+                        git branch: 'main', url: 'https://github.com/thienbanho/spring-petclinic-config-server.git'
+                    }
+                    dir('admin-server') {
+                        git branch: 'main', url: 'https://github.com/thienbanho/spring-petclinic-admin-server.git'
+                    }
+                    dir('api-gateway') {
+                        git branch: 'main', url: 'https://github.com/thienbanho/spring-petclinic-api-gateway.git'
+                    }
+                }
+            }
+        }
+        stage('Build Docker Images') {
+            steps {
+                container('docker') {
+                    script {
+                        // Build image cho các service với branch được chỉ định
+                        def services = [
+                            [name: 'customers-service', branch: params.customers_service_branch, port: 8081],
+                            [name: 'visits-service', branch: params.visits_service_branch, port: 8084],
+                            [name: 'vets-service', branch: params.vets_service_branch, port: 8083],
+                            [name: 'genai-service', branch: params.genai_service_branch, port: 8082]
+                        ]
+                        for (service in services) {
+                            dir(service.name) {
+                                def tag = service.branch == 'main' ? 'latest' : service.branch
+                                sh """
+                                docker build -t petclinic-${service.name}:${tag} \
+                                    --build-arg ARTIFACT_NAME=spring-petclinic-${service.name}/target/spring-petclinic-${service.name}-0.0.1-SNAPSHOT.jar \
+                                    --build-arg EXPOSED_PORT=${service.port} .
+                                """
+                                // Load image vào Minikube
+                                sh "minikube image load petclinic-${service.name}:${tag}"
+                            }
+                        }
+                        // Build các service khác với tag main
+                        def otherServices = [
+                            [name: 'discovery-server', port: 8761],
+                            [name: 'config-server', port: 8888],
+                            [name: 'admin-server', port: 9100],
+                            [name: 'api-gateway', port: 8080]
+                        ]
+                        for (service in otherServices) {
+                            dir(service.name) {
+                                sh """
+                                docker build -t petclinic-${service.name}:latest \
+                                    --build-arg ARTIFACT_NAME=spring-petclinic-${service.name}/target/spring-petclinic-${service.name}-0.0.1-SNAPSHOT.jar \
+                                    --build-arg EXPOSED_PORT=${service.port} .
+                                """
+                                sh "minikube image load petclinic-${service.name}:latest"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        stage('Deploy with Helm') {
+            steps {
+                container('helm') {
+                    script {
+                        // Cập nhật values.yaml với các tag tương ứng
+                        def services = [
+                            [name: 'customers-service', branch: params.customers_service_branch],
+                            [name: 'visits-service', branch: params.visits_service_branch],
+                            [name: 'vets-service', branch: params.vets_service_branch],
+                            [name: 'genai-service', branch: params.genai_service_branch]
+                        ]
+                        def valuesContent = """
+replicaCount: 1
+
+services:
+  - name: discovery-server
+    image: petclinic-discovery-server:latest
+    port: 8761
+  - name: config-server
+    image: petclinic-config-server:latest
+    port: 8888
+  - name: admin-server
+    image: petclinic-admin-server:latest
+    port: 9100
+  - name: api-gateway
+    image: petclinic-api-gateway:latest
+    port: 8080
+"""
+                        for (service in services) {
+                            def tag = service.branch == 'main' ? 'latest' : service.branch
+                            valuesContent += """
+  - name: ${service.name}
+    image: petclinic-${service.name}:${tag}
+    port: ${service.name == 'customers-service' ? 8081 : service.name == 'visits-service' ? 8084 : service.name == 'vets-service' ? 8083 : 8082}
+"""
+                        }
+                        valuesContent += """
+service:
+  type: NodePort
+  nodePort: 30080
+"""
+                        writeFile file: 'petclinic/values.yaml', text: valuesContent
+
+                        // Deploy với Helm
+                        sh """
+                        helm upgrade --install petclinic ./petclinic -n petclinic
+                        """
+                    }
+                }
+            }
+        }
+        stage('Provide Access Details') {
+            steps {
+                script {
+                    // Lấy Minikube IP
+                    def minikubeIp = sh(script: 'minikube ip', returnStdout: true).trim()
+                    // Domain name và port
+                    def domain = "petclinic.local"
+                    def port = "30080"
+                    echo "Deployment successful!"
+                    echo "Access your application at: http://${domain}:${port}"
+                    echo "Please add the following entry to your /etc/hosts file:"
+                    echo "${minikubeIp} ${domain}"
+                }
+            }
+        }
+    }
+}
