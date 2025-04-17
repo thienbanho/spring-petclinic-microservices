@@ -159,7 +159,7 @@ pipeline {
                             def moduleName = "spring-petclinic-${service}"
                             def targetImage = "${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${info.commitId}"
                             def jarFilePath = sh(script: "ls ${moduleName}/target/*.jar | head -n 1", returnStdout: true).trim()
-
+                            def artifactName = jarFilePath.tokenize('/').last().replace('.jar', '')
 
                             echo "📦 Kiểm tra file JAR: ${jarFilePath}"
                             if (!fileExists(jarFilePath)) {
@@ -167,8 +167,14 @@ pipeline {
                             }
                             echo "🐳 Building Docker image cho ${service}"
                             //sh "docker build -f docker/Dockerfile --build-arg ARTIFACT_NAME=${service}-${version} -t ${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${info.commitId} ${moduleName}/target"
-                            sh "docker build -f docker/Dockerfile --build-arg ARTIFACT_NAME=${service}-latest -t ${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${info.commitId} ${moduleName}/target"
-                            
+                            //sh "docker build -f docker/Dockerfile --build-arg ARTIFACT_NAME=${service}-latest -t ${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${info.commitId} ${moduleName}/target"
+                            sh """
+                            docker build \
+                            -f docker/Dockerfile \
+                            --build-arg ARTIFACT_NAME=${artifactName} \
+                            -t ${targetImage} \
+                            ${moduleName}/target
+                            """
                             //sh "./mvnw clean install -PbuildDocker -pl ${moduleName}"
                             
                             echo "🏷️ Gắn tag cho image: ${targetImage}"
