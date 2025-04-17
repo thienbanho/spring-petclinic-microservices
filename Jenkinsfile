@@ -158,7 +158,8 @@ pipeline {
                         if (info.shouldBuild) {
                             def moduleName = "spring-petclinic-${service}"
                             def targetImage = "${DOCKERHUB_CREDENTIALS_USR}/${moduleName}:${info.commitId}"
-                            def jarFilePath = "${moduleName}/target/${service}-latest.jar"
+                            def jarFilePath = sh(script: "ls ${moduleName}/target/*.jar | head -n 1", returnStdout: true).trim()
+
 
                             echo "📦 Kiểm tra file JAR: ${jarFilePath}"
                             if (!fileExists(jarFilePath)) {
