@@ -120,35 +120,35 @@
                             [name: 'genai-service', branch: params.genai_service_branch]
                         ]
                         def valuesContent = """
-replicaCount: 1
+                            replicaCount: 1
 
-services:
-  - name: discovery-server
-    image: petclinic-discovery-server:latest
-    port: 8761
-  - name: config-server
-    image: petclinic-config-server:latest
-    port: 8888
-  - name: admin-server
-    image: petclinic-admin-server:latest
-    port: 9100
-  - name: api-gateway
-    image: petclinic-api-gateway:latest
-    port: 8080
-"""
+                            services:
+                            - name: discovery-server
+                                image: petclinic-discovery-server:latest
+                                port: 8761
+                            - name: config-server
+                                image: petclinic-config-server:latest
+                                port: 8888
+                            - name: admin-server
+                                image: petclinic-admin-server:latest
+                                port: 9100
+                            - name: api-gateway
+                                image: petclinic-api-gateway:latest
+                                port: 8080
+                            """
                         for (service in services) {
                             def tag = service.branch == 'main' ? 'latest' : service.branch
                             valuesContent += """
-  - name: ${service.name}
-    image: petclinic-${service.name}:${tag}
-    port: ${service.name == 'customers-service' ? 8081 : service.name == 'visits-service' ? 8084 : service.name == 'vets-service' ? 8083 : 8082}
-"""
+                                - name: ${service.name}
+                                    image: petclinic-${service.name}:${tag}
+                                    port: ${service.name == 'customers-service' ? 8081 : service.name == 'visits-service' ? 8084 : service.name == 'vets-service' ? 8083 : 8082}
+                                """
                         }
                         valuesContent += """
-service:
-  type: NodePort
-  nodePort: 30080
-"""
+                            service:
+                            type: NodePort
+                            nodePort: 30080
+                            """
                         writeFile file: 'petclinic/values.yaml', text: valuesContent
 
                         // Deploy với Helm
