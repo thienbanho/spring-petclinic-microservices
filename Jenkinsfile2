@@ -135,8 +135,8 @@ autoscaling:
                             def safeRepo = GITOPS_REPO.replace("https://", "https://${GIT_USERNAME}:${GIT_PASSWORD}@")
 
                             sh """
-                                git config user.email "imanhhuy007@gmail.com"
-                                git config user.name "anhhuy007"
+                                git config user.email "thienbanho@gmail.com"
+                                git config user.name "thienbanho"
                                 git status
                                 git add ${valuesPath}
                                 git diff --cached
