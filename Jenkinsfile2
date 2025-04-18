@@ -36,18 +36,22 @@ pipeline {
                     ]
 
                     IMAGE_TAGS = [:]
-
+                    
                     services.each { service, branch ->
-                        def commit = sh(
-                            script: "git ls-remote ${GITOPS_REPO} refs/heads/${branch} | cut -c1-7",
-                            returnStdout: true
-                        ).trim()
-
-                        if (!commit) {
-                            error "❌ Cannot find branch '${branch}' for service '${service}'"
+                        if (branch == 'main') {
+                            IMAGE_TAGS[service] = 'latest'
+                        } else {
+                            def commit = sh(
+                                script: "git ls-remote ${GITOPS_REPO} refs/heads/${branch} | cut -c1-7",
+                                returnStdout: true
+                            ).trim()
+    
+                            if (!commit) {
+                                error "❌ Cannot find branch '${branch}' for service '${service}'"
+                            }
+    
+                            IMAGE_TAGS[service] = commit
                         }
-
-                        IMAGE_TAGS[service] = commit
                     }
 
                     echo "📦 Image tags to be used:"
