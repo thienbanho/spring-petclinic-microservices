@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/matoupine/spring-petclinic-microservices-cd.git
+    repoURL: https://github.com/thienbanho/spring-petclinic-microservices.git
     targetRevision: main
     path: gitops/base/helm-chart
     helm:
