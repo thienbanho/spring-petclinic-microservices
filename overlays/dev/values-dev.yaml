@@ -1,28 +1,28 @@
 # PetClinic values for dev environment
 services:
   - name: customers-service
-    image: thienbanho/spring-petclinic-customers-service:42a1f58
+    image: thienbanho/spring-petclinic-customers-service:52ed95c
     port: 8081
   - name: visits-service
-    image: thienbanho/spring-petclinic-visits-service:42a1f58
+    image: thienbanho/spring-petclinic-visits-service:52ed95c
     port: 8084
   - name: vets-service
-    image: thienbanho/spring-petclinic-vets-service:42a1f58
+    image: thienbanho/spring-petclinic-vets-service:52ed95c
     port: 8083
   - name: genai-service
-    image: thienbanho/spring-petclinic-genai-service:42a1f58
+    image: thienbanho/spring-petclinic-genai-service:52ed95c
     port: 8082
   - name: admin-server
-    image: thienbanho/spring-petclinic-admin-server:42a1f58
+    image: thienbanho/spring-petclinic-admin-server:52ed95c
     port: 9100
   - name: config-server
-    image: thienbanho/spring-petclinic-config-server:42a1f58
+    image: thienbanho/spring-petclinic-config-server:52ed95c
     port: 8888
   - name: api-gateway
-    image: thienbanho/spring-petclinic-api-gateway:42a1f58
+    image: thienbanho/spring-petclinic-api-gateway:52ed95c
     port: 8080
   - name: discovery-server
-    image: thienbanho/spring-petclinic-discovery-server:42a1f58
+    image: thienbanho/spring-petclinic-discovery-server:52ed95c
     port: 8761
 
 service:
