@@ -15,7 +15,7 @@ pipeline {
 
     environment {
         DOCKERHUB_USERNAME = "thienbanho"
-        GITOPS_REPO = "https://github.com/thienbanho/spring-petclinic-microservices-cd.git"
+        GITOPS_REPO = "https://github.com/thienbanho/spring-petclinic-microservices.git"
         GITOPS_BRANCH = "main"
         GIT_CREDENTIALS_ID = "git-credentials"
     }
