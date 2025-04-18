@@ -1,7 +1,7 @@
 # PetClinic values for dev environment
 services:
   - name: customers-service
-    image: thienbanho/spring-petclinic-customers-service:a2c6f6d
+    image: thienbanho/spring-petclinic-customers-service:821fe0a
     port: 8081
   - name: visits-service
     image: thienbanho/spring-petclinic-visits-service:latest
