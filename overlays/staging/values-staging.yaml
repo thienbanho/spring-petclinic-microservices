@@ -1,0 +1,43 @@
+# PetClinic values for dev environment
+services:
+  - name: customers-service
+    image: matoupine/spring-petclinic-customers-service:latest
+    port: 8081
+  - name: visits-service
+    image: matoupine/spring-petclinic-visits-service:latest
+    port: 8084
+  - name: vets-service
+    image: matoupine/spring-petclinic-vets-service:latest
+    port: 8083
+  - name: genai-service
+    image: matoupine/spring-petclinic-genai-service:latest
+    port: 8082
+  - name: admin-server
+    image: matoupine/spring-petclinic-admin-server:latest
+    port: 9100
+  - name: config-server
+    image: matoupine/spring-petclinic-config-server:latest
+    port: 8888
+  - name: api-gateway
+    image: matoupine/spring-petclinic-api-gateway:latest
+    port: 8080
+  - name: discovery-server
+    image: matoupine/spring-petclinic-discovery-server:latest
+    port: 8761
+
+service:
+  type: NodePort
+  nodePort: 30080
+
+serviceAccount:
+  create: true
+  name: ""
+
+ingress:
+  enabled: false
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
