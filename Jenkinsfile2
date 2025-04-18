@@ -14,8 +14,8 @@ pipeline {
     }
 
     environment {
-        DOCKERHUB_USERNAME = "matoupine"
-        GITOPS_REPO = "https://github.com/matoupine/spring-petclinic-microservices-cd.git"
+        DOCKERHUB_USERNAME = "thienbanho"
+        GITOPS_REPO = "https://github.com/thienbanho/spring-petclinic-microservices-cd.git"
         GITOPS_BRANCH = "main"
         GIT_CREDENTIALS_ID = "git-credentials"
     }
