@@ -1,158 +1,171 @@
-﻿pipeline {
-  agent any
+pipeline {
+    agent any
 
-  parameters {
-    string(name: 'CONFIG_SERVER_BRANCH', defaultValue: 'main', description: 'Branch for config-server service')
-    string(name: 'DISCOVERY_SERVER_BRANCH', defaultValue: 'main', description: 'Branch for discovery-server service')
-    string(name: 'API_GATEWAY_BRANCH', defaultValue: 'main', description: 'Branch for api-gateway service')
-    string(name: 'ADMIN_SERVER_BRANCH', defaultValue: 'main', description: 'Branch for admin-server service')
-    string(name: 'CUSTOMERS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for customers-service')
-    string(name: 'VISITS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for visits-service')
-    string(name: 'VETS_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for vets-service')
-    string(name: 'GENAI_SERVICE_BRANCH', defaultValue: 'main', description: 'Branch for genai-service')
-  }
-
-  environment {
-    DOCKER_HUB_CREDS = credentials('dockerhub-credentials')
-    NAMESPACE = 'petclinic'
-    CHART_NAME = 'petclinic'
-    DOCKER_HUB_USERNAME = 'thienbanho'
-    DOMAIN_NAME = 'petclinic.local'
-    NODE_PORT = '30080'  // NodePort của api-gateway
-  }
-
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
+    parameters {
+        string(name: 'BRANCH_CUSTOMERS', defaultValue: 'main', description: 'Branch for customers-service')
+        string(name: 'BRANCH_VISITS', defaultValue: 'main', description: 'Branch for visits-service')
+        string(name: 'BRANCH_VETS', defaultValue: 'main', description: 'Branch for vets-service')
+        string(name: 'BRANCH_GENAI', defaultValue: 'main', description: 'Branch for genai-service')
+        string(name: 'BRANCH_ADMIN', defaultValue: 'main', description: 'Branch for admin-server')
+        string(name: 'BRANCH_CONFIG', defaultValue: 'main', description: 'Branch for config-server')
+        string(name: 'BRANCH_GATEWAY', defaultValue: 'main', description: 'Branch for api-gateway')
+        string(name: 'BRANCH_DISCOVERY', defaultValue: 'main', description: 'Branch for discovery-server')
+        string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Environment to deploy to (dev or staging)')
     }
 
-    stage('Determine Image Tags') {
-      steps {
-        script {
-          def serviceImageTags = [
-            'config-server': determineImageTag('CONFIG_SERVER_BRANCH'),
-            'discovery-server': determineImageTag('DISCOVERY_SERVER_BRANCH'),
-            'api-gateway': determineImageTag('API_GATEWAY_BRANCH'),
-            'admin-server': determineImageTag('ADMIN_SERVER_BRANCH'),
-            'customers-service': determineImageTag('CUSTOMERS_SERVICE_BRANCH'), 
-            'visits-service': determineImageTag('VISITS_SERVICE_BRANCH'),
-            'vets-service': determineImageTag('VETS_SERVICE_BRANCH'),
-            'genai-service': determineImageTag('GENAI_SERVICE_BRANCH')
-          ]
-          env.SERVICE_IMAGE_TAGS = groovy.json.JsonOutput.toJson(serviceImageTags)
-          echo "Service image tags: ${env.SERVICE_IMAGE_TAGS}"
+    environment {
+        DOCKERHUB_USERNAME = "matoupine"
+        GITOPS_REPO = "https://github.com/matoupine/spring-petclinic-microservices-cd.git"
+        GITOPS_BRANCH = "main"
+        GIT_CREDENTIALS_ID = "git-credentials"
+    }
+
+    stages {
+        stage('Generate Image Tags') {
+            steps {
+                script {
+                    def services = [
+                        'customers-service': params.BRANCH_CUSTOMERS,
+                        'visits-service': params.BRANCH_VISITS,
+                        'vets-service': params.BRANCH_VETS,
+                        'genai-service': params.BRANCH_GENAI,
+                        'admin-server': params.BRANCH_ADMIN,
+                        'config-server': params.BRANCH_CONFIG,
+                        'api-gateway': params.BRANCH_GATEWAY,
+                        'discovery-server': params.BRANCH_DISCOVERY
+                    ]
+
+                    IMAGE_TAGS = [:]
+
+                    services.each { service, branch ->
+                        def commit = sh(
+                            script: "git ls-remote ${GITOPS_REPO} refs/heads/${branch} | cut -c1-7",
+                            returnStdout: true
+                        ).trim()
+
+                        if (!commit) {
+                            error "❌ Cannot find branch '${branch}' for service '${service}'"
+                        }
+
+                        IMAGE_TAGS[service] = commit
+                    }
+
+                    echo "📦 Image tags to be used:"
+                    IMAGE_TAGS.each { k, v -> echo " - ${k}: ${v}" }
+                }
+            }
         }
-      }
-    }
 
-    stage('Login to Docker Hub') {
-      steps {
-        sh """
-          echo "\$DOCKER_HUB_CREDS_PSW" | docker login -u "\$DOCKER_HUB_CREDS_USR" --password-stdin
-        """
-      }
-    }
+        stage('Update GitOps Repository') {
+            steps {
+                script {
+                    // Clone the GitOps repo
+                    sh "rm -rf gitops"
+                    sh "git clone ${GITOPS_REPO} gitops"
 
-    stage('Configure Minikube') {
-      steps {
-        sh 'eval $(minikube docker-env)'
-      }
-    }
+                    // Construct values.yaml path
+                    def valuesPath = "overlays/${params.ENVIRONMENT}/values-${params.ENVIRONMENT}.yaml"
+                    def fullValuesPath = "gitops/${valuesPath}"
 
-    stage('Pull & Load Images') {
-      steps {
-        script {
-          def serviceImageTags = new groovy.json.JsonSlurperClassic().parseText(env.SERVICE_IMAGE_TAGS)
-          serviceImageTags.each { service, tag ->
-            def fullImage = "${DOCKER_HUB_USERNAME}/spring-petclinic-${service}:${tag}"
-            def localImage = "spring-petclinic-${service}:${tag}"
+                    // Verify the overlays directory exists, create if missing
+                    def overlaysDir = "gitops/overlays/${params.ENVIRONMENT}"
+                    sh "mkdir -p ${overlaysDir}"
 
-            sh """
-              docker pull ${fullImage}
-              docker tag ${fullImage} ${localImage}
-              minikube image load ${localImage}
-            """
-          }
+                    // Debug: Check existing file content if it exists
+                    if (fileExists(fullValuesPath)) {
+                        def existingContent = readFile(fullValuesPath)
+                        echo "📄 Existing values.yaml content:\n${existingContent}"
+                    } else {
+                        echo "⚠️ No existing values.yaml found at ${fullValuesPath}. Creating new file."
+                    }
+
+                    // Start building YAML content with all fields
+                    def valuesContent = """# PetClinic values for ${params.ENVIRONMENT} environment
+services:
+"""
+
+                    // Hard-code each service with its port and updated image tag
+                    IMAGE_TAGS.each { service, tag ->
+                        def port = service == 'customers-service' ? 8081 :
+                                  service == 'visits-service' ? 8084 :
+                                  service == 'vets-service' ? 8083 :
+                                  service == 'genai-service' ? 8082 :
+                                  service == 'admin-server' ? 9100 :
+                                  service == 'config-server' ? 8888 :
+                                  service == 'api-gateway' ? 8080 :
+                                  service == 'discovery-server' ? 8761 : 8080
+                        valuesContent += """  - name: ${service}
+    image: ${DOCKERHUB_USERNAME}/spring-petclinic-${service}:${tag}
+    port: ${port}
+"""
+                    }
+
+                    // Add the remaining fields from the original values.yaml
+                    valuesContent += """
+service:
+  type: NodePort
+  nodePort: 30080
+
+serviceAccount:
+  create: true
+  name: ""
+
+ingress:
+  enabled: false
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+"""
+
+                    echo "📄 Generated YAML for ${params.ENVIRONMENT}:\n${valuesContent}"
+
+                    // Write the new values file
+                    writeFile file: fullValuesPath, text: valuesContent
+
+                    // Debug: Verify written file content
+                    def writtenContent = readFile(fullValuesPath)
+                    echo "📝 Written values.yaml content:\n${writtenContent}"
+
+                    // Commit and push changes if needed
+                    dir('gitops') {
+                        withCredentials([usernamePassword(credentialsId: GIT_CREDENTIALS_ID, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
+                            def safeRepo = GITOPS_REPO.replace("https://", "https://${GIT_USERNAME}:${GIT_PASSWORD}@")
+
+                            sh """
+                                git config user.email "imanhhuy007@gmail.com"
+                                git config user.name "anhhuy007"
+                                git status
+                                git add ${valuesPath}
+                                git diff --cached
+                                git diff --cached --quiet || git commit -m "Update ${params.ENVIRONMENT} environment with new image tags"
+                                git push ${safeRepo} ${GITOPS_BRANCH}
+                            """
+                        }
+                    }
+                }
+            }
         }
-      }
-    }
 
-    stage('Create Custom Values') {
-      steps {
-        script {
-          def serviceImageTags = new groovy.json.JsonSlurperClassic().parseText(env.SERVICE_IMAGE_TAGS)
-          def originalValues = readFile 'petclinic/values.yaml'
-
-          def updatedValues = originalValues
-          serviceImageTags.each { service, tag ->
-            updatedValues = updatedValues.replaceAll(/(?m)^(\s*)${service}:\s*$\n\1  imageTag: .*/, "\$1${service}:\n\$1  imageTag: ${tag}")
-          }
-
-          // Đảm bảo api-gateway có NodePort
-          updatedValues = updatedValues.replaceAll(/(?m)^(\s*)service:\s*$\n\1  type: .*/, "\$1service:\n\$1  type: NodePort\n\$1  nodePort: ${NODE_PORT}")
-
-          writeFile file: 'custom-values.yaml', text: updatedValues
+        stage('Show Access Info') {
+            steps {
+                script {
+                    echo "🔗 Access app at: http://<WORKER_NODE_IP>:30080"
+                    echo "⚠️ Add domain to /etc/hosts manually if needed."
+                    echo "🔄 ArgoCD will automatically detect and apply changes."
+                }
+            }
         }
-      }
     }
 
-    stage('Deploy with Helm') {
-      steps {
-        script {
-          sh '''
-            kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-            helm upgrade --install ${CHART_NAME} ./petclinic -f custom-values.yaml --namespace ${NAMESPACE}
-          '''
+    post {
+        success {
+            echo "✅ CD Pipeline completed. ArgoCD is synced."
         }
-      }
-    }
-
-    stage('Verify Deployment') {
-      steps {
-        script {
-          sh '''
-            kubectl get pods -n ${NAMESPACE}
-            kubectl get svc -n ${NAMESPACE}
-          '''
+        failure {
+            echo "❌ CD process failed."
         }
-      }
     }
-
-    stage('Provide Access Details') {
-      steps {
-        script {
-          // Lấy Minikube IP
-          def minikubeIp = sh(script: 'minikube ip', returnStdout: true).trim()
-          
-          // Xác nhận NodePort của api-gateway
-          def nodePort = sh(script: "kubectl get svc api-gateway -n ${NAMESPACE} -o jsonpath='{.spec.ports[0].nodePort}'", returnStdout: true).trim()
-          
-          echo "✅ Deployment successful!"
-          echo "Access your application at: http://${DOMAIN_NAME}:${nodePort}"
-          echo "Please add the following entry to your /etc/hosts file:"
-          echo "${minikubeIp} ${DOMAIN_NAME}"
-        }
-      }
-    }
-  }
-
-  post {
-    success {
-      echo "✅ Deployment completed successfully."
-    }
-    failure {
-      echo "❌ Deployment failed. Check logs above."
-    }
-    always {
-      sh "docker logout"
-    }
-  }
-}
-
-// Helper function
-def determineImageTag(String branchParamName) {
-  def branchName = params[branchParamName]
-  return (branchName == 'main' || branchName == 'master') ? 'latest' : branchName
 }
