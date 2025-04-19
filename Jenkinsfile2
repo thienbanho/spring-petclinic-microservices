@@ -11,6 +11,7 @@ pipeline {
         string(name: 'BRANCH_GATEWAY', defaultValue: 'main', description: 'Branch for api-gateway')
         string(name: 'BRANCH_DISCOVERY', defaultValue: 'main', description: 'Branch for discovery-server')
         string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Environment to deploy to (dev or staging)')
+        string(name: 'APP_DOMAIN', defaultValue: 'localhost', description: 'Domain or IP of the environment (e.g., dev.petclinic.local or 192.168.1.100)')
     }
 
     environment {
@@ -156,9 +157,10 @@ autoscaling:
         stage('Show Access Info') {
             steps {
                 script {
-                    echo "🔗 Access app at: http://<WORKER_NODE_IP>:30080"
-                    echo "⚠️ Add domain to /etc/hosts manually if needed."
-                    echo "🔄 ArgoCD will automatically detect and apply changes."
+                    def url = "http://${params.APP_DOMAIN}:30080"
+                    echo "🔗 Application is available at: ${url}"
+                    echo "⚠️ If using a custom domain like dev.petclinic.local, map it in /etc/hosts"
+                    echo "🔄 ArgoCD will sync your deployment automatically."
                 }
             }
         }
