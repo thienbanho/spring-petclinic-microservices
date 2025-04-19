@@ -15,7 +15,7 @@
  * test customer service 5
  * 
  * helm upgrade --install config-server ./helm-chart -n petclinic --create-namespace --set image.repository=thienbanho/spring-petclinic-config-server --set image.tag=latest
- * test cicd 2
+ * test cicd 3
  */
  
 package org.springframework.samples.petclinic.customers;
